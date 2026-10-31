@@ -32,14 +32,15 @@
 #define SHIM_GL_UNSIGNED_BYTE 0x1401
 typedef void (*shim_read_pixels_fn)(int, int, int, int, unsigned int, int, void *);
 #ifndef SOKOL_GLES3
-// glGetBufferSubData exists on desktop GL only; GLES has no buffer readback.
 typedef void (*shim_get_buffer_sub_data_fn)(unsigned int, long, unsigned long, void *);
 #endif
 
 static sg_pipeline compute_pipeline;
 static sg_pipeline render_pipeline;
-static sg_buffer storage_buffer;
-static sg_view storage_view;
+static sg_image result_image;
+static sg_view result_view_storage;  // compute: storage image write
+static sg_view result_view_sampled;  // render: sampled read
+static sg_sampler result_sampler;
 static sg_pass_action pass_action;
 static shim_read_pixels_fn gl_read_pixels;
 #ifndef SOKOL_GLES3
@@ -59,23 +60,104 @@ static void slog(const char *tag, uint32_t log_level, uint32_t log_item, const c
     SDL_Log("%s", message);
 }
 
+#ifdef SOKOL_GLES3
+// Mali diagnosis: replicate sokol's per-stage compiles and the vs+fs program
+// link with the driver, surfacing the info-logs (sokol only logs the generic
+// failure message).
+static void shim_check_gles(void)
+{
+    unsigned int (*p_create)(unsigned int) = (unsigned int (*)(unsigned int))SDL_GL_GetProcAddress("glCreateShader");
+    void (*p_source)(unsigned int, long, const char **, const int *) = (void (*)(unsigned int, long, const char **, const int *))SDL_GL_GetProcAddress("glShaderSource");
+    void (*p_compile)(unsigned int) = (void (*)(unsigned int))SDL_GL_GetProcAddress("glCompileShader");
+    void (*p_getiv)(unsigned int, unsigned int, int *, int *) = (void (*)(unsigned int, unsigned int, int *, int *))SDL_GL_GetProcAddress("glGetShaderiv");
+    void (*p_getlog)(unsigned int, long, int *, char *) = (void (*)(unsigned int, long, int *, char *))SDL_GL_GetProcAddress("glGetShaderInfoLog");
+    void (*p_del)(unsigned int) = (void (*)(unsigned int))SDL_GL_GetProcAddress("glDeleteShader");
+    unsigned int (*p_prog)(void) = (unsigned int (*)(void))SDL_GL_GetProcAddress("glCreateProgram");
+    void (*p_attach)(unsigned int, unsigned int) = (void (*)(unsigned int, unsigned int))SDL_GL_GetProcAddress("glAttachShader");
+    void (*p_link)(unsigned int) = (void (*)(unsigned int))SDL_GL_GetProcAddress("glLinkProgram");
+    void (*p_piv)(unsigned int, unsigned int, int *, int *) = (void (*)(unsigned int, unsigned int, int *, int *))SDL_GL_GetProcAddress("glGetProgramiv");
+    void (*p_plog)(unsigned int, long, int *, char *) = (void (*)(unsigned int, long, int *, char *))SDL_GL_GetProcAddress("glGetProgramInfoLog");
+    if (!p_create || !p_source || !p_compile || !p_getiv || !p_getlog || !p_del || !p_prog || !p_attach || !p_link || !p_piv || !p_plog)
+    {
+        return;
+    }
+    const char *sources[3] = {SHADER_VS_SRC_GLES, SHADER_FS_SRC_GLES, SHADER_COMPUTE_SRC_GLES};
+    const char *names[3] = {"vertex", "fragment", "compute"};
+    unsigned int stages[3] = {0x8B31, 0x8B30, 0x91B9};
+    for (int i = 0; i < 3; i++)
+    {
+        unsigned int shd = p_create(stages[i]);
+        const char *src = sources[i];
+        int len = (int)strlen(src);
+        p_source(shd, 1, &src, &len);
+        p_compile(shd);
+        int ok = 0;
+        p_getiv(shd, 0x8B01 /* GL_COMPILE_STATUS */, &ok, NULL);
+        if (!ok)
+        {
+            char logbuf[2048] = {0};
+            int n = 0;
+            p_getlog(shd, (int)sizeof(logbuf) - 1, &n, logbuf);
+            SDL_Log("GLSL %s compile failed:\n%s", names[i], logbuf);
+        }
+        p_del(shd);
+    }
+    unsigned int vs = p_create(0x8B31);
+    unsigned int fs = p_create(0x8B30);
+    const char *vs_src = SHADER_VS_SRC_GLES;
+    const char *fs_src = SHADER_FS_SRC_GLES;
+    int vlen = (int)strlen(vs_src);
+    int flen = (int)strlen(fs_src);
+    p_source(vs, 1, &vs_src, &vlen);
+    p_compile(vs);
+    p_source(fs, 1, &fs_src, &flen);
+    p_compile(fs);
+    unsigned int prog = p_prog();
+    p_attach(prog, vs);
+    p_attach(prog, fs);
+    p_link(prog);
+    int linked = 0;
+    p_piv(prog, 0x8B82 /* GL_LINK_STATUS */, &linked, NULL);
+    if (!linked)
+    {
+        char logbuf[2048] = {0};
+        int n = 0;
+        p_plog(prog, (int)sizeof(logbuf) - 1, &n, logbuf);
+        SDL_Log("GLSL program link failed:\n%s", logbuf);
+    }
+    p_del(vs);
+    p_del(fs);
+    p_del(prog);
+}
+#endif
+
 void shim_init(void)
 {
     sg_setup(&(sg_desc){
         .logger.func = slog,
     });
 
-    storage_buffer = sg_make_buffer(&(sg_buffer_desc){
-        .usage.storage_buffer = true,
-        .size = 4 * sizeof(uint32_t),
+#ifdef SOKOL_GLES3
+    shim_check_gles();
+#endif
+
+    result_image = sg_make_image(&(sg_image_desc){
+        .width = 4,
+        .height = 1,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
+        .usage = {.storage_image = true},
     });
-    storage_view = sg_make_view(&(sg_view_desc){
-        .storage_buffer = {.buffer = storage_buffer},
+    result_view_storage = sg_make_view(&(sg_view_desc){
+        .storage_image = {.image = result_image},
     });
+    result_view_sampled = sg_make_view(&(sg_view_desc){
+        .texture = {.image = result_image},
+    });
+    result_sampler = sg_make_sampler(&(sg_sampler_desc){});
 
     sg_shader compute_shd = sg_make_shader(&(sg_shader_desc){
         .compute_func = {.source = SHADER_COMPUTE_SRC},
-        .views[0].storage_buffer = {.stage = SG_SHADERSTAGE_COMPUTE, .glsl_binding_n = 0},
+        .views[0].storage_image = {.stage = SG_SHADERSTAGE_COMPUTE, .access_format = SG_PIXELFORMAT_RGBA8},
     });
     compute_pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .compute = true,
@@ -85,7 +167,9 @@ void shim_init(void)
     sg_shader render_shd = sg_make_shader(&(sg_shader_desc){
         .vertex_func = {.source = SHADER_VS_SRC},
         .fragment_func = {.source = SHADER_FS_SRC},
-        .views[0].storage_buffer = {.stage = SG_SHADERSTAGE_FRAGMENT, .readonly = true, .glsl_binding_n = 0},
+        .views[1].texture = {.stage = SG_SHADERSTAGE_FRAGMENT},
+        .samplers[0] = {.stage = SG_SHADERSTAGE_FRAGMENT},
+        .texture_sampler_pairs[0] = {.stage = SG_SHADERSTAGE_FRAGMENT, .view_slot = 1, .sampler_slot = 0},
     });
     render_pipeline = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = render_shd,
@@ -113,7 +197,7 @@ void shim_resize(int width, int height)
     frame_height = height;
 }
 
-void shim_begin_frame(int width, int height)
+void shim_begin_default_pass(int width, int height)
 {
     frame_width = width;
     frame_height = height;
@@ -128,7 +212,7 @@ void shim_compute(void)
     sg_begin_pass(&pass);
     sg_apply_pipeline(compute_pipeline);
     sg_apply_bindings(&(sg_bindings){
-        .views[0] = storage_view,
+        .views[0] = result_view_storage,
     });
     sg_dispatch(1, 1, 1);
     sg_end_pass();
@@ -138,7 +222,8 @@ void shim_render(void)
 {
     sg_apply_pipeline(render_pipeline);
     sg_apply_bindings(&(sg_bindings){
-        .views[0] = storage_view,
+        .views[1] = result_view_sampled,
+        .samplers[0] = result_sampler,
     });
     sg_draw(3, 1, 1);
 }
@@ -161,22 +246,31 @@ bool shim_read_pixels(unsigned char out[16])
     return true;
 }
 
-// Test harness verification read. Desktop GL: glGetBufferSubData straight
-// from the sokol storage buffer. GLES (Android) has no buffer readback — the
-// render pass encodes the values into the framebuffer alpha bands, so
+// Test harness verification read. Desktop GL: glGetTexImage straight from
+// the compute-written image texels. GLES (Android) has no texture readback —
+// the render pass paints the compute results into the framebuffer, so
 // glReadPixels verifies the same numbers through the visible render.
 bool shim_read_storage(unsigned char out[16])
 {
 #ifdef SOKOL_GLES3
-    // GLES: framebuffer alpha bytes carry the values; normalize to u32 slots
-    if (!shim_read_pixels(out))
+    return shim_read_pixels(out);
+#else
+    if (!gl_get_tex_image || !gl_bind_texture)
     {
         return false;
     }
+    _sg_image_t *tex = _sg_lookup_image(result_image.id);
+    if (!tex)
+    {
+        return false;
+    }
+    gl_bind_texture(0x0DE1 /* GL_TEXTURE_2D */, tex->gl.tex[0]);
+    gl_get_tex_image(0x0DE1, 0, SHIM_GL_RGBA, SHIM_GL_UNSIGNED_BYTE, out);
+    // normalize: the values travel in the alpha byte of each texel
     unsigned char a[4];
     for (int i = 0; i < 4; i++)
     {
-        a[i] = out[i * 4]; // red channel carries the value
+        a[i] = out[i * 4 + 3];
     }
     memset(out, 0, 16);
     for (int i = 0; i < 4; i++)
@@ -184,34 +278,6 @@ bool shim_read_storage(unsigned char out[16])
         out[i * 4] = a[i];
     }
     return true;
-#else
-    if (!gl_get_buffer_sub_data)
-    {
-        return false;
-    }
-    _sg_buffer_t *buf = _sg_lookup_buffer(storage_buffer.id);
-    if (!buf)
-    {
-        return false;
-    }
-    const unsigned int target = 0x90D2 /* GL_SHADER_STORAGE_BUFFER */;
-    for (int f = 0; f < 2; f++)
-    {
-        char tmp[16];
-        glBindBuffer(target, buf->gl.buf[f]);
-        glGetBufferSubData(target, 0, 16, tmp);
-        SDL_Log("ssbo slot %d: %u %u %u %u", f, (unsigned)((uint32_t *)tmp)[0],
-                (unsigned)((uint32_t *)tmp)[1], (unsigned)((uint32_t *)tmp)[2],
-                (unsigned)((uint32_t *)tmp)[3]);
-        if (((uint32_t *)tmp)[3] == 20u)
-        {
-            memcpy(out, tmp, 16);
-            glBindBuffer(target, 0);
-            return true;
-        }
-    }
-    glBindBuffer(target, 0);
-    return false;
 #endif
 }
 

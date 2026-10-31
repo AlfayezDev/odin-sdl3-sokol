@@ -14,10 +14,12 @@ frames: i32
 @(export)
 odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.AppResult {
     context = runtime.default_context()
-    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
-    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 3)
-    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, transmute(i32) sdl.GL_CONTEXT_PROFILE_CORE)
-    sdl.GL_SetAttribute(.ALPHA_SIZE, 0) // opaque surface: no premultiplied dimming on Android
+    // GLES 3.1 everywhere: sokol's GLES3 backend (compute + SSBO) on every
+    // platform, and alpha-free opaque surfaces for clean mobile compositing.
+    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, transmute(i32) sdl.GL_CONTEXT_PROFILE_ES)
+    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 3)
+    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 1)
+    sdl.GL_SetAttribute(.ALPHA_SIZE, 0)
 
     window = sdl.CreateWindow("Odin + sokol_gfx", width, height, sdl.WindowFlags{.OPENGL, .RESIZABLE})
     if window == nil do return .FAILURE

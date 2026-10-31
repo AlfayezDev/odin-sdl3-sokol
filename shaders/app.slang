@@ -7,7 +7,9 @@
 // [11, 14, 17, 20]; the fragment pass reads it back and encodes the values
 // into the framebuffer alpha channel (verified by readback asserts).
 
-[vk::binding(0, 0)] RWStructuredBuffer<uint> vals;
+[vk::binding(0, 0)] RWTexture2D<float4> rw_img;   // compute: storage image write
+[vk::binding(1, 0)] Texture2D<float4> img_tex;    // render: sampled read
+[vk::binding(2, 0)] SamplerState img_smp;         // render: sampler for the pair
 
 static const uint multiplier = 3;
 
@@ -16,7 +18,7 @@ static const uint multiplier = 3;
 void cs_main(uint3 tid : SV_DispatchThreadID)
 {
     uint i = tid.x;
-    vals[i] = i * multiplier + 11u;
+    rw_img[uint2(i, 0)] = float4(1.0, 0.5, 0.25, float(i * multiplier + 11u) / 255.0);
 }
 
 struct VS_Out
@@ -39,6 +41,8 @@ VS_Out vs_main(uint vid : SV_VertexID)
 float4 ps_main(float2 uv : TEXCOORD0, float4 frag_pos : SV_Position) : SV_Target
 {
     uint band = min(uint(frag_pos.x) / 120u, 3u);
-    float v = float(vals[band]) / 255.0;
+    // the compute-encoded result travels in the image alpha channel;
+    // band centers land exactly on texel centers (480 / 4 bands)
+    float v = img_tex.SampleLevel(img_smp, uv, 0).a;
     return float4(v, v, v, 1.0); // value in every color channel: channel-order agnostic
 }
