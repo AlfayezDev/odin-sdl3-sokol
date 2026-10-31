@@ -40,5 +40,5 @@ float4 ps_main(float2 uv : TEXCOORD0, float4 frag_pos : SV_Position) : SV_Target
 {
     uint band = min(uint(frag_pos.x) / 120u, 3u);
     float v = float(vals[band]) / 255.0;
-    return float4(1.0, 0.5, 0.25, v);
+    return float4(v, v, v, 1.0); // value in every color channel: channel-order agnostic
 }

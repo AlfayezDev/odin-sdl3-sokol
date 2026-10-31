@@ -1,7 +1,16 @@
 cmake_minimum_required(VERSION 3.22)
 project(OdinSokol C)
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
+if(ANDROID)
+  set(SDL_SHARED ON CACHE BOOL "" FORCE)
+  set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+  set(ODIN_PLATFORM android)
+  set(ODIN_ARCH ${ANDROID_ABI})
+else()
+  set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+  set(SDL_STATIC ON CACHE BOOL "" FORCE)
+  set(ODIN_PLATFORM desktop)
+  set(ODIN_ARCH native)
+endif()
 add_subdirectory(deps/SDL3-3.2.28 EXCLUDE_FROM_ALL)
 
 set(ENTRY ${CMAKE_CURRENT_BINARY_DIR}/entry.c)
@@ -9,17 +18,27 @@ file(WRITE ${ENTRY} "#include \"${CMAKE_CURRENT_SOURCE_DIR}/app/entry.h\"\n")
 file(GLOB_RECURSE ODIN_SOURCES CONFIGURE_DEPENDS app/*.odin)
 set(APP_OBJECT ${CMAKE_CURRENT_BINARY_DIR}/odin-app.o)
 add_custom_command(OUTPUT ${APP_OBJECT}
-  COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/odin-object.sh desktop native ${APP_OBJECT}
+  COMMAND ${CMAKE_COMMAND} -E env ODIN_ANDROID_NDK=${CMAKE_ANDROID_NDK}
+    bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/odin-object.sh ${ODIN_PLATFORM} ${ODIN_ARCH} ${APP_OBJECT}
   DEPENDS ${ODIN_SOURCES} app/native/shaders_generated.h shaders/app.slang VERBATIM)
 set_source_files_properties(${APP_OBJECT} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
 find_package(Threads REQUIRED)
-find_package(OpenGL REQUIRED)
-find_package(X11 REQUIRED)
 
-# odin-sokol executable; app/native/sokol_shim.c is the SOKOL_IMPL translation
-# unit (GL core backend) plus the flat C API the Odin side binds.
-add_executable(odin-sokol ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
-target_include_directories(odin-sokol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
-target_compile_definitions(odin-sokol PRIVATE SOKOL_IMPL SOKOL_GLCORE SOKOL_NO_ENTRY)
-target_link_libraries(odin-sokol PRIVATE SDL3::SDL3 OpenGL::GL X11::X11 Threads::Threads ${CMAKE_DL_LIBS})
+# sokol_shim.c is the SOKOL_IMPL translation unit. GL core on desktop,
+# GLES3 on Android (storage buffers + compute need GLES 3.1+); the backend
+# define is selected inside sokol_shim.c via __ANDROID__.
+if(ANDROID)
+  add_library(main SHARED ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
+  target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
+  target_compile_definitions(main PRIVATE SOKOL_NO_ENTRY)
+  target_link_libraries(main PRIVATE SDL3::SDL3 EGL GLESv3 ${CMAKE_DL_LIBS} android log)
+  target_link_options(main PRIVATE -Wl,--no-undefined -Wl,-z,max-page-size=16384)
+else()
+  find_package(OpenGL REQUIRED)
+  find_package(X11 REQUIRED)
+  add_executable(odin-sokol ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
+  target_include_directories(odin-sokol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
+  target_compile_definitions(odin-sokol PRIVATE SOKOL_NO_ENTRY)
+  target_link_libraries(odin-sokol PRIVATE SDL3::SDL3 OpenGL::GL X11::X11 Threads::Threads ${CMAKE_DL_LIBS})
+endif()

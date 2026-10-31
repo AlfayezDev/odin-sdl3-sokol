@@ -17,6 +17,7 @@ odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.A
     sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 4)
     sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 3)
     sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, transmute(i32) sdl.GL_CONTEXT_PROFILE_CORE)
+    sdl.GL_SetAttribute(.ALPHA_SIZE, 0) // opaque surface: no premultiplied dimming on Android
 
     window = sdl.CreateWindow("Odin + sokol_gfx", width, height, sdl.WindowFlags{.OPENGL, .RESIZABLE})
     if window == nil do return .FAILURE

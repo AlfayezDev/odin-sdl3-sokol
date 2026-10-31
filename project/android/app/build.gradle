@@ -1,0 +1,17 @@
+plugins { id 'com.android.application' }
+android {
+    namespace '@APPLICATION_ID@'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        applicationId '@APPLICATION_ID@'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        externalNativeBuild { cmake { arguments '-DANDROID_STL=c++_static', '-DGFX=' + (System.getenv('GFX') ?: 'sdl'), '-DSMOKE_FRAMES=' + (System.getenv('SMOKE_FRAMES') ?: '0') } }
+    }
+    externalNativeBuild { cmake { path '../../CMakeLists.txt'; version '3.22.1' } }
+}
