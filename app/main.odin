@@ -6,14 +6,15 @@ import sdl "vendor:sdl3"
 import sokol "native"
 
 SMOKE_FRAMES :: #config(SMOKE_FRAMES, 0)
+SAMPLE_ID :: #config(SAMPLE_ID, 0)
 
 width, height: i32 = 480, 800
 window: ^sdl.Window
 gl: sdl.GLContext
 frames: i32
 
-// The render verification: sample colors at the three vertices (nudged 1%
-// inward) and at screen center (0,0), whose barycentric mix is
+// The triangle (sample 0) render verification: colors at the three vertices
+// (nudged 1% inward) and at screen center (0,0), whose barycentric mix is
 // red 0.5, green 0.25, blue 0.25. Tolerance covers rasterizer edge effects.
 verify_pixels :: proc(pixels: [16]u8) {
     corners := [4][3]f32{
@@ -46,35 +47,47 @@ odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.A
     window = sdl.CreateWindow("Odin + sokol_gfx", width, height, sdl.WindowFlags{.OPENGL, .RESIZABLE})
     if window == nil do return .FAILURE
 
-    // SDL owns the GL context everywhere: desktop GL 4.1 core / Android ES 3.0,
-    // versions requested via shim_gl_attributes.
+    // SDL owns the GL context everywhere: desktop GL 4.1 core / Android+iOS
+    // ES 3.0, versions requested via shim_gl_attributes.
     gl = sdl.GL_CreateContext(window)
     if gl == nil do return .FAILURE
     sdl.GL_MakeCurrent(window, gl)
 
     sokol.shim_init(window)
+    sokol.sample_init(SAMPLE_ID)
     return .CONTINUE
 }
 
 @(export)
 odin_app_Iterate :: proc "c" (state: rawptr) -> sdl.AppResult {
+    context = runtime.default_context()
     w, h: i32
     sdl.GetWindowSizeInPixels(window, &w, &h)
     if w == 0 || h == 0 do return .CONTINUE
 
-    sokol.shim_begin_default_pass(w, h)
-    sokol.shim_render()
+    sokol.shim_frame_begin()
 
-    // Test harness: read the three vertex corners + centroid and verify the
-    // interpolated vertex colors.
-    context = runtime.default_context()
-    pixels: [16]u8
-    if sokol.shim_read_pixels(raw_data(&pixels)) {
+    if SAMPLE_ID == 0 {
+        sokol.shim_begin_default_pass(w, h)
+        sokol.shim_render()
+
+        pixels: [16]u8
+        if sokol.shim_read_pixels(raw_data(&pixels)) {
+            frames += 1
+            verify_pixels(pixels)
+        }
+        sokol.shim_end_frame()
+    } else {
+        sokol.sample_frame(SAMPLE_ID, w, h)
+
+        // smoke harness: the frame must leave non-clear content at screen center
+        pixel: [16]u8
+        if sokol.shim_read_pixels(raw_data(&pixel)) {
+            assert(pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0, "sample rendered nothing")
+        }
         frames += 1
-        verify_pixels(pixels)
     }
 
-    sokol.shim_end_frame()
     sokol.shim_swap()
 
     when SMOKE_FRAMES > 0 {
@@ -91,6 +104,7 @@ odin_app_Event :: proc "c" (state: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 
 @(export)
 odin_app_Quit :: proc "c" (state: rawptr, result: sdl.AppResult) {
+    sokol.sample_shutdown(SAMPLE_ID)
     sokol.shim_shutdown()
     if window != nil do sdl.DestroyWindow(window)
     sdl.Quit()

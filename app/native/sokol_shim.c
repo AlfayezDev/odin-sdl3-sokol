@@ -5,9 +5,9 @@
 // glReadPixels at the corners and centroid.
 #include "sokol_shim.h"
 
-// sokol_gfx implementation TU (GL core on desktop, GLES3 on Android).
+// sokol_gfx implementation TU (GL core on desktop, GLES3 on Android/iOS).
 #define SOKOL_IMPL
-#if defined(__ANDROID__)
+#if defined(SHIM_GLES3)
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE
@@ -16,13 +16,7 @@
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_log.h"
 
-#ifdef SOKOL_GLES3
-#include "triangle_gles300.h"
-#define TRIANGLE_SHADER_DESC triangle_gles300_shader_desc
-#else
-#include "triangle_gl330.h"
-#define TRIANGLE_SHADER_DESC triangle_gl330_shader_desc
-#endif
+#include "triangle_shaders.h"
 
 #include <SDL3/SDL.h>
 #include <string.h>
@@ -61,7 +55,7 @@ static const float triangle_vertices[] = {
 
 void shim_gl_attributes(void)
 {
-#if defined(__ANDROID__)
+#if defined(SHIM_GLES3)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -70,6 +64,7 @@ void shim_gl_attributes(void)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #endif
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 }
 
 void shim_init(void *sdl_window)
@@ -162,4 +157,32 @@ void shim_end_frame(void)
 void shim_swap(void)
 {
     SDL_GL_SwapWindow((SDL_Window *)sdl_window_handle);
+}
+
+// frame timing: shim_frame_begin() updates dt/time once per frame
+static Uint64 perf_freq, perf_last;
+static float frame_dt, frame_time;
+
+void shim_frame_begin(void)
+{
+    if (perf_freq == 0)
+    {
+        perf_freq = (Uint64)SDL_GetPerformanceFrequency();
+        perf_last = SDL_GetPerformanceCounter();
+        return;
+    }
+    const Uint64 now = SDL_GetPerformanceCounter();
+    frame_dt = (float)((double)(now - perf_last) / (double)perf_freq);
+    perf_last = now;
+    frame_time += frame_dt;
+}
+
+float shim_dt(void)
+{
+    return frame_dt;
+}
+
+float shim_time(void)
+{
+    return frame_time;
 }

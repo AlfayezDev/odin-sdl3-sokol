@@ -3,12 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 case "$1" in
   desktop)
-    if [ "${2:-run}" = build ]; then
-      cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug >/dev/null
-      cmake --build build/desktop --parallel 4
-    else
-      cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug >/dev/null
-      cmake --build build/desktop --parallel 4
+    cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug -DSAMPLE_ID="${SAMPLE_ID:-0}" >/dev/null
+    cmake --build build/desktop --parallel 4
+    if [ "${2:-run}" = run ]; then
       exec ./build/desktop/odin-sokol
     fi
     ;;
@@ -25,8 +22,7 @@ case "$1" in
     "$adb" shell am start -n dev.alfayez.odinsokol/.OdinsokolActivity
     ;;
   ios)
-    echo 'iOS: open ios/ in Xcode (planned)' >&2
-    exit 2
+    ./scripts/ios.sh "${2:-iphonesimulator}"
     ;;
   *)
     echo "Usage: run.sh [desktop|android|ios] [run|build]" >&2

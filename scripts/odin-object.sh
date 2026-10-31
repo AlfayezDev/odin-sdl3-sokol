@@ -16,4 +16,4 @@ case "$platform/$arch" in
   desktop/*) ;;
   *) echo "Unsupported platform/architecture: $platform/$arch" >&2; exit 1;;
 esac
-"$odin" build "$root/app" -collection:libs="$root/vendors" -define:SMOKE_FRAMES="${SMOKE_FRAMES:-0}" -no-entry-point -build-mode:obj -use-single-module -o:speed -reloc-mode:pic ${args[@]+"${args[@]}"} -out:"$out"
+"$odin" build "$root/app" -collection:libs="$root/vendors" -define:SMOKE_FRAMES="${SMOKE_FRAMES:-0}" -define:SAMPLE_ID="${SAMPLE_ID:-0}" -no-entry-point -build-mode:obj -use-single-module -o:speed -reloc-mode:pic ${args[@]+"${args[@]}"} -out:"$out"
