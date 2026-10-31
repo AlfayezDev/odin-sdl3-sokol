@@ -5,8 +5,6 @@
 package sg
 
 
-foreign import gfx "sokol_gfx_impl"
-
 // constants
 INVALID_ID :: 0
 MAX_COLOR_ATTACHMENTS :: 8
@@ -277,6 +275,97 @@ Attr_Base_Type :: enum u32 {
 	FLOAT,
 	SINT,
 	UINT,
+}
+
+// setup descriptor (sg_desc)
+Allocator :: struct {
+	alloc_fn:  proc "c" (size: uint, user_data: rawptr) -> rawptr,
+	free_fn:   proc "c" (ptr: rawptr, user_data: rawptr),
+	user_data: rawptr,
+}
+
+Log_Func :: #type proc "c" (tag: cstring, log_level: u32, log_item_id: u32, message_or_null: cstring, line_nr: u32, filename_or_null: cstring, user_data: rawptr)
+
+Logger :: struct {
+	func:      Log_Func,
+	user_data: rawptr,
+}
+
+Environment_Defaults :: struct {
+	color_format: Pixel_Format,
+	depth_format: Pixel_Format,
+	sample_count: i32,
+}
+
+Metal_Environment :: struct {
+	device: rawptr,
+}
+
+D3D11_Environment :: struct {
+	device:        rawptr,
+	device_context: rawptr,
+}
+
+Wgpu_Environment :: struct {
+	device: rawptr,
+}
+
+Vulkan_Environment :: struct {
+	instance:           rawptr,
+	physical_device:    rawptr,
+	device:             rawptr,
+	queue:              rawptr,
+	queue_family_index: u32,
+}
+
+Environment :: struct {
+	defaults: Environment_Defaults,
+	metal:    Metal_Environment,
+	d3d11:    D3D11_Environment,
+	wgpu:     Wgpu_Environment,
+	vulkan:   Vulkan_Environment,
+}
+
+D3D11_Desc :: struct {
+	shader_debugging: b8,
+}
+
+Metal_Desc :: struct {
+	force_managed_storage_mode:                  b8,
+	use_command_buffer_with_retained_references: b8,
+}
+
+Wgpu_Desc :: struct {
+	disable_bindgroups_cache: b8,
+	bindgroups_cache_size:    i32,
+}
+
+Vulkan_Desc :: struct {
+	copy_staging_buffer_size:     i32,
+	transient_staging_buffer_size: i32,
+	descriptor_buffer_size:       i32,
+}
+
+Desc :: struct {
+	_start_canary:         u32,
+	buffer_pool_size:      i32,
+	image_pool_size:       i32,
+	sampler_pool_size:     i32,
+	shader_pool_size:      i32,
+	pipeline_pool_size:    i32,
+	view_pool_size:        i32,
+	uniform_buffer_size:   i32,
+	max_commit_listeners:  i32,
+	disable_validation:    b8,
+	enforce_portable_limits: b8,
+	d3d11:                 D3D11_Desc,
+	metal:                 Metal_Desc,
+	wgpu:                  Wgpu_Desc,
+	vulkan:                Vulkan_Desc,
+	allocator:             Allocator,
+	logger:                Logger,
+	environment:           Environment,
+	_end_canary:           u32,
 }
 
 // structs
@@ -733,7 +822,7 @@ Write_Image_Desc :: struct {
 }
 
 // functions
-foreign gfx {
+foreign {
 @(link_name="sg_setup")
 		setup :: proc "c" (desc: rawptr) ---
 @(link_name="sg_shutdown")

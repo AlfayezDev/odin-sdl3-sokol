@@ -3,8 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 case "$1" in
   desktop)
-    cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug -DSAMPLE_ID="${SAMPLE_ID:-0}" -DSMOKE_FRAMES="${SMOKE_FRAMES:-0}" >/dev/null
-    cmake --build build/desktop --parallel 4
+    cmake -S . -B build/desktop -DCMAKE_BUILD_TYPE=Debug >/dev/null
+    cmake --build build/desktop --target SDL3-static --parallel 4
+    SAMPLE_ID=${SAMPLE_ID:-0} SMOKE_FRAMES=${SMOKE_FRAMES:-0} bash scripts/odin-object.sh desktop native build/desktop/odin-sokol
     if [ "${2:-run}" = run ]; then
       exec ./build/desktop/odin-sokol
     fi

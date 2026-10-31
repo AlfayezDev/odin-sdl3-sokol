@@ -5,8 +5,6 @@ package sdtx
 
 import sg "libs:sg"
 
-foreign import sdtx_impl "sokol_debugtext_impl"
-
 MAX_FONTS :: 8
 MAX_COMMANDS :: 4096
 
@@ -41,7 +39,7 @@ Desc :: struct {
 	logger:            rawptr,
 }
 
-foreign sdtx_impl {
+foreign {
 @(link_name="sdtx_setup")
 		setup :: proc "c" (desc: ^Desc) ---
 @(link_name="sdtx_shutdown")

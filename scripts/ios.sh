@@ -7,7 +7,6 @@ cd "$(dirname "$0")/.."
 [[ $(uname -s) == Darwin ]] || { echo 'iOS project generation/build requires macOS, Xcode and XcodeGen 2.44.1.' >&2; exit 1; }
 [[ $(xcodegen --version) == *2.44.1* ]] || { echo 'Install XcodeGen 2.44.1 (see README).' >&2; exit 1; }
 mkdir -p build/ios build/generated
-printf '#include "../../app/entry.h"\n' > build/generated/entry.m
 xcodegen generate --spec project.yml --project build/ios
 [[ ${2:-} == --generate-only ]] && exit 0
 case "${1:-iphonesimulator}" in

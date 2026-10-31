@@ -22,7 +22,7 @@ if not isinstance(label, str) or not label.strip():
 with tempfile.TemporaryDirectory(dir=root / "build") as staging:
     subprocess.run([
         sys.executable, str(root / "deps/SDL3-3.2.28/build-scripts/create-android-project.py"),
-        app_id, str(root / "app/entry.h"), "--variant", "symlink", "--output", staging,
+        app_id, str(root / "app/main.odin"), "--variant", "symlink", "--output", staging,
     ], check=True)
     shutil.copytree(Path(staging) / app_id, root / "android", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("jni"))

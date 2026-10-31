@@ -4,8 +4,6 @@ package sshape
 
 import sg "libs:sg"
 
-foreign import shape_impl "sokol_shape_impl"
-
 MAX_VERTEX_SIZE :: 24
 
 Mat4 :: struct {
@@ -108,7 +106,7 @@ range_of :: proc(p: rawptr, byte_size: uint) -> Range {
 	return Range{ptr = p, size = byte_size}
 }
 
-foreign shape_impl {
+foreign {
 @(link_name="sshape_build_plane")
 		build_plane :: proc "c" (state: ^State, params: ^Plane) ---
 @(link_name="sshape_build_box")

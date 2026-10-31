@@ -1,16 +1,61 @@
 package app
 
 // The sokol-samples ports in Odin. Each sample owns its sokol-gfx resources
-// and drives the whole frame; the shim provides the platform GL setup, the
-// swap and the pixel-readback harness.
+// and drives the whole frame (begin pass, draw, end pass, commit); timing
+// comes from frame_dt (updated in main.odin).
 import "core:math"
-import sdl "vendor:sdl3"
 import sg "libs:sg"
-import sokol "native"
 import sgl "libs:sgl"
 import sdtx "libs:sdtx"
 import sshape "libs:sshape"
 import shaders "libs:shaders"
+
+// ---------------------------------------------------------------- triangle
+triangle_state :: struct {
+    pip:         sg.Pipeline,
+    bind:        sg.Bindings,
+    pass_action: sg.Pass_Action,
+}
+triangle_s: triangle_state
+
+triangle_vertices_data := [18]f32{
+    0.0, 0.5, 0.5, 1.0, 0.0, 0.0,
+    -0.5, -0.5, 0.5, 0.0, 1.0, 0.0,
+    0.5, -0.5, 0.5, 0.0, 0.0, 1.0,
+}
+
+triangle_init :: proc() {
+    triangle_shd_desc := shaders.triangle_triangle_shader_desc(sg.query_backend())
+    triangle_s.bind.vertex_buffers[0] = sg.make_buffer(&sg.Buffer_Desc{
+        data = sg.range_of(raw_data(&triangle_vertices_data), size_of(triangle_vertices_data)),
+        label = "triangle-vertices",
+    })
+    triangle_s.pip = sg.make_pipeline(&sg.Pipeline_Desc{
+        shader = sg.make_shader(&triangle_shd_desc),
+        layout = {
+            attrs = {
+                shaders.triangle_ATTR_triangle_position = {format = .FLOAT3},
+                shaders.triangle_ATTR_triangle_color0 = {format = .FLOAT3},
+            },
+        },
+        label = "triangle-pipeline",
+    })
+    triangle_s.pass_action = {colors = {0 = {load_action = .CLEAR, clear_value = {0.08, 0.22, 0.43, 1.0}}}}
+}
+
+triangle_frame :: proc(w, h: i32) {
+    sample_begin_pass(&triangle_s.pass_action, w, h)
+    sg.apply_pipeline(triangle_s.pip)
+    sg.apply_bindings(&triangle_s.bind)
+    sg.draw(0, 3, 1)
+    sg.end_pass()
+    sg.commit()
+}
+
+triangle_shutdown :: proc() {
+    sg.destroy_pipeline(triangle_s.pip)
+    sg.destroy_buffer(triangle_s.bind.vertex_buffers[0])
+}
 
 // ---------------------------------------------------------------- registry
 Sample :: struct {
@@ -21,7 +66,7 @@ Sample :: struct {
 }
 
 samples_table := [12]Sample{
-    {name = "triangle"},
+    {name = "triangle", init = triangle_init, frame = triangle_frame, shutdown = triangle_shutdown},
     {name = "quad", init = quad_init, frame = quad_frame, shutdown = quad_shutdown},
     {name = "mandelbrot", init = mandelbrot_init, frame = mandelbrot_frame, shutdown = mandelbrot_shutdown},
     {name = "cube", init = cube_init, frame = cube_frame, shutdown = cube_shutdown},
@@ -135,7 +180,7 @@ mandelbrot_init :: proc() {
 }
 
 mandelbrot_frame :: proc(w, h: i32) {
-    mandelbrot_s.time = math.mod(mandelbrot_s.time + sokol.shim_dt(), 20.0)
+    mandelbrot_s.time = math.mod(mandelbrot_s.time + frame_dt, 20.0)
     aspect := f32(w) / f32(h)
     width := f32(4.0 * math.pow(0.6, f64(mandelbrot_s.time)))
     iter_max := 64 + i32(f32(math.log2(4.0 / f64(width))) * 32.0)
@@ -245,7 +290,7 @@ cube_init :: proc() {
 }
 
 cube_frame :: proc(w, h: i32) {
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     cube_s.rx += 1.0 * t
     cube_s.ry += 2.0 * t
     vs_params := shaders.cube_Vs_Params{mvp = sample_mvp2(cube_s.rx, cube_s.ry, f32(w), f32(h), 4.0)}
@@ -338,7 +383,7 @@ instancing_init :: proc() {
 }
 
 instancing_frame :: proc(w, h: i32) {
-    frame_time_s := sokol.shim_dt()
+    frame_time_s := frame_dt
     for i in 0..<INST_EMIT_PER_FRAME {
         if inst_s.cur_num_particles < INST_MAX_PARTICLES {
             inst_s.pos[inst_s.cur_num_particles] = {0, 0, 0}
@@ -512,7 +557,7 @@ offscreen_init :: proc() {
 }
 
 offscreen_frame :: proc(w, h: i32) {
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     off_s.rx += 1.0 * t
     off_s.ry += 2.0 * t
     vs_params := shaders.offscreen_Vs_Params{mvp = offscreen_mvp(off_s.rx, off_s.ry, 1.0, 2.5)}
@@ -676,7 +721,7 @@ dyntex_init :: proc() {
 }
 
 dyntex_frame :: proc(w, h: i32) {
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     dynt_s.rx += 1.0 * t
     dynt_s.ry += 2.0 * t
     vs_params := shaders.dyntex_Vs_Params{mvp = sample_mvp2(dynt_s.rx, dynt_s.ry, f32(w), f32(h), 4.0)}
@@ -857,7 +902,7 @@ mrt_frame :: proc(w, h: i32) {
     if w != mrt_s.cur_w || h != mrt_s.cur_h {
         mrt_reinit_attachments(w, h)
     }
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     proj := mat4_perspective(0.7853982, f32(w) / f32(h), 0.01, 10.0)
     view := mat4_look_at({0, 1.5, 4.0}, {0, 0, 0}, {0, 1, 0})
     view_proj := mat4_mul(view, proj)
@@ -1018,7 +1063,7 @@ blend_frame :: proc(w, h: i32) {
     }
     sg.end_pass()
     sg.commit()
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     blend_s.r += 0.6 * t
     blend_s.bg_fs_params.tick += 1.0 * t
 }
@@ -1117,7 +1162,7 @@ shapes_frame :: proc(w, h: i32) {
     proj := mat4_perspective(1.0471976, f32(w) / f32(h), 0.01, 10.0)
     view := mat4_look_at({0, 1.5, 4.0}, {0, 0, 0}, {0, 1, 0})
     view_proj := mat4_mul(view, proj)
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     shapes_s.rx += 1.0 * t
     shapes_s.ry += 2.0 * t
     rm := mat4_mul(mat4_rotation_y(shapes_s.ry), mat4_rotation_x(shapes_s.rx))
@@ -1298,7 +1343,7 @@ sgl_sample_init :: proc() {
 }
 
 sgl_sample_frame :: proc(w, h: i32) {
-    t := sokol.shim_dt() * 60.0
+    t := frame_dt * 60.0
     dw, dh := w, h
     ww, hh := dh / 2, dh / 2
     x0 := dw / 2 - hh

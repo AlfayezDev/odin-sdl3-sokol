@@ -10,8 +10,6 @@ targets:
   odin-sokol:
     type: application
     platform: iOS
-    sources:
-      - build/generated/entry.m
     settings:
       base:
         CLANG_ENABLE_OBJC_ARC: YES
@@ -23,7 +21,7 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         ENABLE_DEBUG_DYLIB: NO
         HEADER_SEARCH_PATHS: "$(SRCROOT)/../../deps/SDL3-3.2.28/include"
-        OTHER_LDFLAGS: '$(inherited) -lc++ "$(DERIVED_FILE_DIR)/odin-app.o"'
+        OTHER_LDFLAGS: '$(inherited) -lc++ "$(DERIVED_FILE_DIR)/odin-app.o" "$(DERIVED_FILE_DIR)/sokol_gfx.o" "$(DERIVED_FILE_DIR)/sokol_gl.o" "$(DERIVED_FILE_DIR)/sokol_debugtext.o" "$(DERIVED_FILE_DIR)/sokol_shape.o"'
     dependencies:
       - target: SDL/SDL3
         embed: true
@@ -40,6 +38,10 @@ targets:
         showEnvVars: false
         outputFiles:
           - $(DERIVED_FILE_DIR)/odin-app.o
+          - $(DERIVED_FILE_DIR)/sokol_gfx.o
+          - $(DERIVED_FILE_DIR)/sokol_gl.o
+          - $(DERIVED_FILE_DIR)/sokol_debugtext.o
+          - $(DERIVED_FILE_DIR)/sokol_shape.o
 schemes:
   odin-sokol:
     build:

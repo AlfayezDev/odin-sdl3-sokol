@@ -4,8 +4,6 @@ package sgl
 
 import sg "libs:sg"
 
-foreign import gl_impl "sokol_gl_impl"
-
 MAX_DEFAULT_ATTRIBUTES :: 16
 
 Pipeline :: struct {id: u32}
@@ -24,7 +22,7 @@ Desc :: struct {
 	logger:            rawptr, // sgl_logger_t (unused)
 }
 
-foreign gl_impl {
+foreign {
 @(link_name="sgl_setup")
 		setup :: proc "c" (desc: ^Desc) ---
 @(link_name="sgl_shutdown")

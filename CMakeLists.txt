@@ -5,46 +5,74 @@ if(ANDROID)
   set(SDL_STATIC OFF CACHE BOOL "" FORCE)
   set(ODIN_PLATFORM android)
   set(ODIN_ARCH ${ANDROID_ABI})
+  set(SOKOL_BACKEND SOKOL_GLES3)
 else()
   set(SDL_SHARED OFF CACHE BOOL "" FORCE)
   set(SDL_STATIC ON CACHE BOOL "" FORCE)
   set(ODIN_PLATFORM desktop)
   set(ODIN_ARCH native)
+  set(SOKOL_BACKEND SOKOL_GLCORE)
 endif()
-add_subdirectory(deps/SDL3-3.2.28 EXCLUDE_FROM_ALL)
-
-set(ENTRY ${CMAKE_CURRENT_BINARY_DIR}/entry.c)
-file(WRITE ${ENTRY} "#include \"${CMAKE_CURRENT_SOURCE_DIR}/app/entry.h\"\n")
-file(GLOB_RECURSE ODIN_SOURCES CONFIGURE_DEPENDS app/*.odin)
-set(APP_OBJECT ${CMAKE_CURRENT_BINARY_DIR}/odin-app.o)
 if(NOT SAMPLE_ID)
   set(SAMPLE_ID 0)
 endif()
 if(NOT SMOKE_FRAMES)
   set(SMOKE_FRAMES 0)
 endif()
+add_subdirectory(deps/SDL3-3.2.28 EXCLUDE_FROM_ALL)
+
+file(GLOB_RECURSE ODIN_SOURCES CONFIGURE_DEPENDS app/*.odin)
+file(GLOB SHADER_BINDINGS CONFIGURE_DEPENDS vendors/shaders/*.odin)
+set(APP_OBJECT ${CMAKE_CURRENT_BINARY_DIR}/odin-app.o)
 add_custom_command(OUTPUT ${APP_OBJECT}
-  COMMAND ${CMAKE_COMMAND} -E env SAMPLE_ID=${SAMPLE_ID} SMOKE_FRAMES=${SMOKE_FRAMES} ODIN_ANDROID_NDK=${CMAKE_ANDROID_NDK}
+  COMMAND ${CMAKE_COMMAND} -E env SAMPLE_ID=${SAMPLE_ID} SMOKE_FRAMES=${SMOKE_FRAMES} ODIN_ANDROID_NDK=${ANDROID_NDK}
     bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/odin-object.sh ${ODIN_PLATFORM} ${ODIN_ARCH} ${APP_OBJECT}
-  DEPENDS ${ODIN_SOURCES} app/native/triangle_shaders.h shaders/triangle.glsl ${CMAKE_SOURCE_DIR}/vendors/shaders VERBATIM)
+  DEPENDS ${ODIN_SOURCES} ${SHADER_BINDINGS} shaders/samples)
 set_source_files_properties(${APP_OBJECT} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
-find_package(Threads REQUIRED)
-
-# sokol_shim.c is the SOKOL_IMPL translation unit. GL core on desktop,
-# GLES3 on Android; the backend define is selected inside sokol_shim.c via
-# __ANDROID__.
+# The vendored sokol headers are the only C in the build: compile them
+# directly (impl defines + -x c), no project C sources at all.
 if(ANDROID)
-  add_library(main SHARED ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
-  target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
-  target_compile_definitions(main PRIVATE SOKOL_NO_ENTRY)
+  if(ANDROID_ABI STREQUAL arm64-v8a)
+    set(SOKOL_TRIPLE aarch64-linux-android29)
+  else()
+    set(SOKOL_TRIPLE x86_64-linux-android29)
+  endif()
+  set(SOKOL_CC ${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang
+      --target=${SOKOL_TRIPLE}
+      --sysroot=${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/sysroot)
+else()
+  set(SOKOL_CC ${CMAKE_C_COMPILER})
+endif()
+set(SOKOL_HEADERS ${CMAKE_SOURCE_DIR}/vendors/sokol)
+set(SOKOL_OBJECTS)
+foreach(unit IN ITEMS gfx gl debugtext shape)
+  if(unit STREQUAL gfx)
+    set(header sokol_gfx.h)
+    set(extra -DSOKOL_IMPL -include sokol_log.h)
+  elseif(unit STREQUAL gl)
+    set(header sokol_gl.h)
+    set(extra -DSOKOL_GL_IMPL -include sokol_gfx.h)
+  elseif(unit STREQUAL debugtext)
+    set(header sokol_debugtext.h)
+    set(extra -DSOKOL_DEBUGTEXT_IMPL -include sokol_gfx.h)
+  else()
+    set(header sokol_shape.h)
+    set(extra -DSOKOL_SHAPE_IMPL -include sokol_gfx.h)
+  endif()
+  set(obj ${CMAKE_CURRENT_BINARY_DIR}/sokol_${unit}.o)
+  add_custom_command(OUTPUT ${obj}
+    COMMAND ${SOKOL_CC} -x c -c -O2 -DSOKOL_NO_ENTRY -D${SOKOL_BACKEND} ${extra}
+      -I${SOKOL_HEADERS} ${SOKOL_HEADERS}/${header} -o ${obj}
+    DEPENDS ${SOKOL_HEADERS}/${header}
+    VERBATIM)
+  set_source_files_properties(${obj} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+  list(APPEND SOKOL_OBJECTS ${obj})
+endforeach()
+
+if(ANDROID)
+  add_library(main SHARED ${APP_OBJECT} ${SOKOL_OBJECTS})
+  set_target_properties(main PROPERTIES LINKER_LANGUAGE C)
   target_link_libraries(main PRIVATE SDL3::SDL3 EGL GLESv3 ${CMAKE_DL_LIBS} android log)
   target_link_options(main PRIVATE -Wl,--no-undefined -Wl,-z,max-page-size=16384)
-else()
-  find_package(OpenGL REQUIRED)
-  find_package(X11 REQUIRED)
-  add_executable(odin-sokol ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
-  target_include_directories(odin-sokol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
-  target_compile_definitions(odin-sokol PRIVATE SOKOL_NO_ENTRY)
-  target_link_libraries(odin-sokol PRIVATE SDL3::SDL3 OpenGL::GL X11::X11 Threads::Threads ${CMAKE_DL_LIBS})
 endif()
