@@ -1,4 +1,4 @@
-@ctype mat4 mat44_t
+@ctype mat4 [16]f32
 
 @vs vs
 layout(binding=0) uniform vs_params {

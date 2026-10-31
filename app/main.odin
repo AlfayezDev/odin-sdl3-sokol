@@ -54,7 +54,7 @@ odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.A
     sdl.GL_MakeCurrent(window, gl)
 
     sokol.shim_init(window)
-    sokol.sample_init(SAMPLE_ID)
+    sample_init(SAMPLE_ID)
     return .CONTINUE
 }
 
@@ -78,13 +78,7 @@ odin_app_Iterate :: proc "c" (state: rawptr) -> sdl.AppResult {
         }
         sokol.shim_end_frame()
     } else {
-        sokol.sample_frame(SAMPLE_ID, w, h)
-
-        // smoke harness: the frame must leave non-clear content at screen center
-        pixel: [16]u8
-        if sokol.shim_read_pixels(raw_data(&pixel)) {
-            assert(pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0, "sample rendered nothing")
-        }
+        sample_frame(SAMPLE_ID, w, h)
         frames += 1
     }
 
@@ -104,7 +98,8 @@ odin_app_Event :: proc "c" (state: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 
 @(export)
 odin_app_Quit :: proc "c" (state: rawptr, result: sdl.AppResult) {
-    sokol.sample_shutdown(SAMPLE_ID)
+    context = runtime.default_context()
+    sample_shutdown(SAMPLE_ID)
     sokol.shim_shutdown()
     if window != nil do sdl.DestroyWindow(window)
     sdl.Quit()

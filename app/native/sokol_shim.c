@@ -15,6 +15,10 @@
 #define SOKOL_NO_ENTRY
 #include "sokol/sokol_gfx.h"
 #include "sokol/sokol_log.h"
+// the remaining sokol impls Odin binds against (SOKOL_IMPL enables them)
+#include "sokol/sokol_gl.h"
+#include "sokol/sokol_debugtext.h"
+#include "sokol/sokol_shape.h"
 
 #include "triangle_shaders.h"
 
@@ -73,6 +77,7 @@ void shim_init(void *sdl_window)
 
     sg_setup(&(sg_desc){
         .logger.func = slog,
+        .pipeline_pool_size = 512, // the blend sample creates ~200 pipelines
     });
 
     vertices = sg_make_buffer(&(sg_buffer_desc){

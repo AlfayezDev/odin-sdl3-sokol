@@ -20,10 +20,13 @@ set(APP_OBJECT ${CMAKE_CURRENT_BINARY_DIR}/odin-app.o)
 if(NOT SAMPLE_ID)
   set(SAMPLE_ID 0)
 endif()
+if(NOT SMOKE_FRAMES)
+  set(SMOKE_FRAMES 0)
+endif()
 add_custom_command(OUTPUT ${APP_OBJECT}
-  COMMAND ${CMAKE_COMMAND} -E env SAMPLE_ID=${SAMPLE_ID} ODIN_ANDROID_NDK=${CMAKE_ANDROID_NDK}
+  COMMAND ${CMAKE_COMMAND} -E env SAMPLE_ID=${SAMPLE_ID} SMOKE_FRAMES=${SMOKE_FRAMES} ODIN_ANDROID_NDK=${CMAKE_ANDROID_NDK}
     bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/odin-object.sh ${ODIN_PLATFORM} ${ODIN_ARCH} ${APP_OBJECT}
-  DEPENDS ${ODIN_SOURCES} app/native/triangle_shaders.h shaders/triangle.glsl VERBATIM)
+  DEPENDS ${ODIN_SOURCES} app/native/triangle_shaders.h shaders/triangle.glsl ${CMAKE_SOURCE_DIR}/vendors/shaders VERBATIM)
 set_source_files_properties(${APP_OBJECT} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
 find_package(Threads REQUIRED)
@@ -32,7 +35,7 @@ find_package(Threads REQUIRED)
 # GLES3 on Android; the backend define is selected inside sokol_shim.c via
 # __ANDROID__.
 if(ANDROID)
-  add_library(main SHARED ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c app/native/samples.c)
+  add_library(main SHARED ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
   target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
   target_compile_definitions(main PRIVATE SOKOL_NO_ENTRY)
   target_link_libraries(main PRIVATE SDL3::SDL3 EGL GLESv3 ${CMAKE_DL_LIBS} android log)
@@ -40,7 +43,7 @@ if(ANDROID)
 else()
   find_package(OpenGL REQUIRED)
   find_package(X11 REQUIRED)
-  add_executable(odin-sokol ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c app/native/samples.c)
+  add_executable(odin-sokol ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
   target_include_directories(odin-sokol PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)
   target_compile_definitions(odin-sokol PRIVATE SOKOL_NO_ENTRY)
   target_link_libraries(odin-sokol PRIVATE SDL3::SDL3 OpenGL::GL X11::X11 Threads::Threads ${CMAKE_DL_LIBS})

@@ -14,8 +14,4 @@ foreign sokol_lib {
     shim_read_pixels        :: proc(out: ^u8) -> b32 ---
     shim_end_frame          :: proc() ---
     shim_swap               :: proc() ---
-    sample_init             :: proc(id: i32) ---
-    sample_frame            :: proc(id, width, height: i32) ---
-    sample_shutdown         :: proc(id: i32) ---
-    sample_verify           :: proc(id: i32, pixels: ^u8) -> b32 ---
 }
