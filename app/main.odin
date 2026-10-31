@@ -1,5 +1,6 @@
 package app
 
+import "core:fmt"
 import "core:runtime"
 import sdl "vendor:sdl3"
 import sokol "native"
@@ -11,52 +12,70 @@ window: ^sdl.Window
 gl: sdl.GLContext
 frames: i32
 
+// The render verification: sample colors at the three vertices (nudged 1%
+// inward) and at screen center (0,0), whose barycentric mix is
+// red 0.5, green 0.25, blue 0.25. Tolerance covers rasterizer edge effects.
+verify_pixels :: proc(pixels: [16]u8) {
+    corners := [4][3]f32{
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        {0.5, 0.25, 0.25},
+    }
+    sdl.Log("px: %d %d %d | %d %d %d | %d %d %d | %d %d %d",
+        pixels[0], pixels[1], pixels[2], pixels[4], pixels[5], pixels[6],
+        pixels[8], pixels[9], pixels[10], pixels[12], pixels[13], pixels[14])
+    for i in 0..<4 {
+        for c in 0..<3 {
+            // i32 math: u8 would overflow on expect+12 near 255
+            expect := i32(corners[i][c] * 255.0 + 0.5)
+            got := i32(pixels[i*4+c])
+            assert(
+                got >= expect - 12 && got <= expect + 12,
+                fmt.tprintf("pixel %d channel %d: got %d want ~%d", i, c, got, expect),
+            )
+        }
+    }
+}
+
 @(export)
 odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.AppResult {
     context = runtime.default_context()
-    // GLES 3.1 everywhere: sokol's GLES3 backend (compute + SSBO) on every
-    // platform, and alpha-free opaque surfaces for clean mobile compositing.
-    sdl.GL_SetAttribute(.CONTEXT_PROFILE_MASK, transmute(i32) sdl.GL_CONTEXT_PROFILE_ES)
-    sdl.GL_SetAttribute(.CONTEXT_MAJOR_VERSION, 3)
-    sdl.GL_SetAttribute(.CONTEXT_MINOR_VERSION, 1)
-    sdl.GL_SetAttribute(.ALPHA_SIZE, 0)
+    sokol.shim_gl_attributes()
 
     window = sdl.CreateWindow("Odin + sokol_gfx", width, height, sdl.WindowFlags{.OPENGL, .RESIZABLE})
     if window == nil do return .FAILURE
+
+    // SDL owns the GL context everywhere: desktop GL 4.1 core / Android ES 3.0,
+    // versions requested via shim_gl_attributes.
     gl = sdl.GL_CreateContext(window)
     if gl == nil do return .FAILURE
     sdl.GL_MakeCurrent(window, gl)
-    sdl.GL_SetSwapInterval(1)
 
-    sokol.shim_init()
+    sokol.shim_init(window)
     return .CONTINUE
 }
 
 @(export)
 odin_app_Iterate :: proc "c" (state: rawptr) -> sdl.AppResult {
-    context = runtime.default_context()
     w, h: i32
     sdl.GetWindowSizeInPixels(window, &w, &h)
     if w == 0 || h == 0 do return .CONTINUE
 
-    sokol.shim_compute()
-    sokol.shim_begin_frame(w, h)
+    sokol.shim_begin_default_pass(w, h)
     sokol.shim_render()
-    sokol.shim_end_frame()
 
-    // Test harness: read the storage buffer straight through GL and assert
-    // the compute results [11, 14, 17, 20].
-    storage: [16]u8
-    if sokol.shim_read_storage(raw_data(&storage)) {
+    // Test harness: read the three vertex corners + centroid and verify the
+    // interpolated vertex colors.
+    context = runtime.default_context()
+    pixels: [16]u8
+    if sokol.shim_read_pixels(raw_data(&pixels)) {
         frames += 1
-        sdl.Log("storage = %d %d %d %d", storage[0], storage[4], storage[8], storage[12])
-        for i in 0..<4 {
-            v := u32(storage[i*4])
-            assert(v == u32(i)*3+11, "compute readback failed")
-        }
+        verify_pixels(pixels)
     }
 
-    sdl.GL_SwapWindow(window)
+    sokol.shim_end_frame()
+    sokol.shim_swap()
 
     when SMOKE_FRAMES > 0 {
         if frames >= SMOKE_FRAMES do return .SUCCESS
@@ -73,7 +92,6 @@ odin_app_Event :: proc "c" (state: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 @(export)
 odin_app_Quit :: proc "c" (state: rawptr, result: sdl.AppResult) {
     sokol.shim_shutdown()
-    if gl != nil do sdl.GL_DestroyContext(gl)
     if window != nil do sdl.DestroyWindow(window)
     sdl.Quit()
 }

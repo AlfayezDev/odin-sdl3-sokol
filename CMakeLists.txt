@@ -20,14 +20,14 @@ set(APP_OBJECT ${CMAKE_CURRENT_BINARY_DIR}/odin-app.o)
 add_custom_command(OUTPUT ${APP_OBJECT}
   COMMAND ${CMAKE_COMMAND} -E env ODIN_ANDROID_NDK=${CMAKE_ANDROID_NDK}
     bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/odin-object.sh ${ODIN_PLATFORM} ${ODIN_ARCH} ${APP_OBJECT}
-  DEPENDS ${ODIN_SOURCES} app/native/shaders_generated.h shaders/app.slang VERBATIM)
+  DEPENDS ${ODIN_SOURCES} app/native/triangle_shaders.h shaders/triangle.glsl VERBATIM)
 set_source_files_properties(${APP_OBJECT} PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
 
 find_package(Threads REQUIRED)
 
 # sokol_shim.c is the SOKOL_IMPL translation unit. GL core on desktop,
-# GLES3 on Android (storage buffers + compute need GLES 3.1+); the backend
-# define is selected inside sokol_shim.c via __ANDROID__.
+# GLES3 on Android; the backend define is selected inside sokol_shim.c via
+# __ANDROID__.
 if(ANDROID)
   add_library(main SHARED ${ENTRY} ${APP_OBJECT} app/native/sokol_shim.c)
   target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendors)

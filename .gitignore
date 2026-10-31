@@ -1,5 +1,8 @@
 build/
-deps/
-*.o
-*.spv
-__pycache__/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties/
+android/.idea/
+*.log
