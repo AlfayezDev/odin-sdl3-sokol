@@ -315,11 +315,6 @@ cat "%s/objs.txt" | xargs -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc)" -L1 sh 
 // ------------------------------------------------------------ android
 
 build_android :: proc(sample_id, smoke: i32) {
-	if !sh("test -d android/app") {
-		if !sh("python3 scripts/generate-android.py") {
-			fail("android scaffold generation failed")
-		}
-	}
 	ndk := os.get_env_alloc("ANDROID_NDK", context.allocator)
 	if ndk == "" {
 		sh(`
