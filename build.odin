@@ -521,11 +521,24 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("odin android object build failed")
 	}
 
+	// bridgegen: kotlin bridge + jni glue from binding/api/bridge.h
+	if !sh("test -x build/tools/bridgegen") {
+		if !sh("odin build tools/bridgegen/src -o:speed -out:build/tools/bridgegen") {
+			fail("bridgegen build failed")
+		}
+	}
+	if !sh("build/tools/bridgegen --header binding/api/bridge.h --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --package dev.alfayez.odinsokol --class OdinBridge") {
+		fail("bridgegen failed")
+	}
+	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/api build/gen/bridge_jni.c -o build/gen/bridge_jni.o", android_cc)) {
+		fail("bridge_jni.c compile failed")
+	}
+
 	// rename + link libmain.so
 	llvm_objcopy := fmt.tprintf("%s/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy", ndk)
 	sh(fmt.tprintf("%s --redefine-sym sdl_main_provider=SDL_main %s/odin-app.o", llvm_objcopy, out_dir))
 	link := fmt.tprintf(
-		"%s/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android29 --sysroot=%s/toolchains/llvm/prebuilt/linux-x86_64/sysroot -shared -Wl,-soname,libmain.so -o %s/libmain.so %s/odin-app.o %s/obj/sokol_*.o -L%s -lSDL3 -lEGL -lGLESv3 -llog -landroid -ldl -lm",
+		"%s/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android29 --sysroot=%s/toolchains/llvm/prebuilt/linux-x86_64/sysroot -shared -Wl,-soname,libmain.so -o %s/libmain.so %s/odin-app.o %s/obj/sokol_*.o build/gen/bridge_jni.o -L%s -lSDL3 -lEGL -lGLESv3 -llog -landroid -ldl -lm",
 		ndk, ndk, out_dir, out_dir, out_dir, out_dir,
 	)
 	if !sh(link) {
