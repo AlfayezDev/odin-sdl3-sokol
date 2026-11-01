@@ -451,7 +451,7 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("Android NDK not found (set ANDROID_NDK)")
 	}
 	out_dir := fmt.tprintf("build/android/arm64-v8a")
-	sh(fmt.tprintf("mkdir -p %s android/app/src/main/jniLibs/arm64-v8a", out_dir))
+	sh(fmt.tprintf("mkdir -p %s build/android/jni/arm64-v8a build/tools", out_dir))
 
 	gen_sdl_config(fmt.tprintf("%s/SDL_build_config.h", out_dir),
 		fmt.tprintf("%s/include/build_config/SDL_build_config.h.cmake", sdl_dir()),
@@ -529,10 +529,24 @@ printf '%s' "$NDK" > build/android_ndk_path
 	if !sh(link) {
 		fail("libmain.so link failed")
 	}
-	sh(fmt.tprintf("cp %s/libSDL3.so %s/libmain.so android/app/src/main/jniLibs/arm64-v8a/", out_dir, out_dir))
+	sh(fmt.tprintf("cp %s/libSDL3.so %s/libmain.so build/android/jni/arm64-v8a/", out_dir, out_dir))
+
+	// generate the gradle project from binding/android (androidgen)
+	if !sh("test -x build/tools/androidgen") {
+		if !sh("odin build tools/androidgen/src -o:speed -out:build/tools/androidgen") {
+			fail("androidgen build failed")
+		}
+	}
+	if !sh("build/tools/androidgen generate --spec binding/android/project.yaml --out android --templates tools/androidgen") {
+		fail("androidgen generate failed")
+	}
 
 	if !sh("(cd android && ./gradlew --no-daemon :app:assembleDebug)") {
 		fail("gradle assembleDebug failed")
+	}
+	if os.get_env_alloc("ANDROID_BUILD_ONLY", context.allocator) == "1" {
+		fmt.println("ANDROID_BUILD_ONLY=1: packaged android/app/build/outputs/apk/debug/app-debug.apk, skipping install/launch")
+		return
 	}
 	if !sh("adb install -r android/app/build/outputs/apk/debug/app-debug.apk") {
 		fail("adb install failed")
@@ -552,7 +566,7 @@ build_ios :: proc(sample_id, smoke: i32) {
 	}
 	// generated ObjC trampoline: SDL callbacks forwarded to the Odin app
 	sh("mkdir -p build/ios")
-	if !sh("xcodegen generate --spec ios.yaml --project build/ios") {
+	if !sh("xcodegen generate --spec binding/ios/project.yaml --project build/ios") {
 		fail("xcodegen failed")
 	}
 	cmd := fmt.tprintf(

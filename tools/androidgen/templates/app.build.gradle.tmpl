@@ -1,0 +1,15 @@
+plugins { id 'com.android.application' }
+android {
+    namespace '{{namespace}}'
+    compileSdk {{compile_sdk}}
+    buildToolsVersion '{{build_tools_version}}'
+    ndkVersion '{{ndk_version}}'
+    defaultConfig {
+        applicationId '{{app_id}}'
+        minSdk {{min_sdk}}
+        targetSdk {{target_sdk}}
+        versionCode {{version_code}}
+        versionName '{{version_name}}'
+        ndk { {{abi_filters}} }
+    }
+{{java_srcdirs}}}
