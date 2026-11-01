@@ -25,7 +25,7 @@ odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
 - `shaders/samples/*.glsl` — shader sources; regenerate bindings with
-  `python3 scripts/shdc.py` after editing
+  `odin run . -- shaders` after editing
 
 The vendored sokol headers are the only C in the build: compiled straight
 from the headers with impl defines, per platform, by whatever clang the
