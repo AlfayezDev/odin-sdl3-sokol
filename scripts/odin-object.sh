@@ -37,7 +37,7 @@ if [[ "$platform" == desktop ]]; then
       -I"$root/vendors/sokol" "$root/vendors/sokol/$header" -o "$obj"
     sokol_objs+=("$obj")
   done
-  linker="-L$build_dir/deps/SDL3-3.2.28 -lSDL3 ${sokol_objs[*]} -lX11 -lGL -ldl -lpthread -lm"
+  linker="-Wl,--start-group -L$build_dir -lSDL3 ${sokol_objs[*]} -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
   args+=(-extra-linker-flags:"$linker")
 fi
 
@@ -47,6 +47,7 @@ fi
 
 # android/ios: rename our entry to the SDL_main symbol SDL expects
 if [[ "$platform" == android ]]; then
+  [[ -n "${ODIN_ANDROID_NDK:-}" ]] && ODIN_ANDROID_NDK="${ANDROID_NDK:-$ODIN_ANDROID_NDK}"
   objcopy_bin="$ODIN_ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy"
   [[ -x "$objcopy_bin" ]] || objcopy_bin=$(ls "$ODIN_ANDROID_NDK"/toolchains/llvm/prebuilt/*/bin/llvm-objcopy 2>/dev/null | head -1)
   "$objcopy_bin" --redefine-sym sdl_main_provider=SDL_main "$out"

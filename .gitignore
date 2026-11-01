@@ -6,3 +6,4 @@ android/app/.cxx/
 android/local.properties/
 android/.idea/
 *.log
+android/app/src/main/jniLibs/
