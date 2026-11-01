@@ -210,7 +210,7 @@ mandelbrot_shutdown :: proc() {
 }
 
 // shared mvp used by cube/dyntex-style samples
-sample_mvp2 :: proc(rx, ry, w, h, eye_dist: f32) -> Mat4 {
+sample_mvp :: proc(rx, ry, w, h, eye_dist: f32) -> Mat4 {
     proj := mat4_perspective(1.0471976, w / h, 0.01, 10.0)
     view := mat4_look_at({0, 1.5, eye_dist}, {0, 0, 0}, {0, 1, 0})
     view_proj := mat4_mul(view, proj)
@@ -293,7 +293,7 @@ cube_frame :: proc(w, h: i32) {
     t := frame_dt * 60.0
     cube_s.rx += 1.0 * t
     cube_s.ry += 2.0 * t
-    vs_params := shaders.cube_Vs_Params{mvp = sample_mvp2(cube_s.rx, cube_s.ry, f32(w), f32(h), 4.0)}
+    vs_params := shaders.cube_Vs_Params{mvp = sample_mvp(cube_s.rx, cube_s.ry, f32(w), f32(h), 4.0)}
     pa := sg.Pass_Action{colors = {0 = {load_action = .CLEAR, clear_value = {0.25, 0.5, 0.75, 1.0}}}}
     sample_begin_pass(&pa, w, h)
     sg.apply_pipeline(cube_s.pip)
@@ -724,7 +724,7 @@ dyntex_frame :: proc(w, h: i32) {
     t := frame_dt * 60.0
     dynt_s.rx += 1.0 * t
     dynt_s.ry += 2.0 * t
-    vs_params := shaders.dyntex_Vs_Params{mvp = sample_mvp2(dynt_s.rx, dynt_s.ry, f32(w), f32(h), 4.0)}
+    vs_params := shaders.dyntex_Vs_Params{mvp = sample_mvp(dynt_s.rx, dynt_s.ry, f32(w), f32(h), 4.0)}
     gol_update()
     sg.write_image_transient(&sg.Write_Image_Desc{
         src = {data = sg.range_of(raw_data(&dynt_s.pixels), size_of(dynt_s.pixels))},
