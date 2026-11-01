@@ -602,8 +602,7 @@ void SDL_AppQuit(void *s, SDL_AppResult r) { odin_app_Quit(s, r); }
 `
 	sh("mkdir -p build/ios")
 	_ = os.write_entire_file_from_string("build/ios/entry.m", entry_m)
-	_ = os.write_entire_file_from_string("build/ios/project.yml", ios_project_yml())
-	if !sh("xcodegen generate --spec build/ios/project.yml --project build/ios") {
+	if !sh("xcodegen generate --spec ios.yaml --project build/ios") {
 		fail("xcodegen failed")
 	}
 	cmd := fmt.tprintf(
@@ -616,86 +615,3 @@ void SDL_AppQuit(void *s, SDL_AppResult r) { odin_app_Quit(s, r); }
 	fmt.println("wrote build/ios-derived/Build/Products/Debug-iphonesimulator/odin-sokol.app")
 }
 
-ios_project_yml :: proc() -> string {
-	return `name: OdinSokol
-options:
-  minimumXcodeGenVersion: 2.44.1
-  deploymentTarget:
-    iOS: "17.4"
-projectReferences:
-  SDL:
-    path: ../../deps/SDL3-3.2.28/Xcode/SDL/SDL.xcodeproj
-targets:
-  odin-sokol:
-    type: application
-    platform: iOS
-    sources:
-      - entry.m
-    settings:
-      base:
-        CLANG_ENABLE_OBJC_ARC: YES
-        PRODUCT_BUNDLE_IDENTIFIER: dev.alfayez.odinsokol
-        INFOPLIST_FILE: "$(SRCROOT)/../../ios/Info.plist"
-        TARGETED_DEVICE_FAMILY: "1,2"
-        ENABLE_USER_SCRIPT_SANDBOXING: NO
-        ENABLE_DEBUG_DYLIB: NO
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/../../deps/SDL3-3.2.28/include"
-        OTHER_LDFLAGS: '$(inherited) -lc++ "$(DERIVED_FILE_DIR)/odin-app.o" "$(DERIVED_FILE_DIR)/sokol_gfx.o" "$(DERIVED_FILE_DIR)/sokol_gl.o" "$(DERIVED_FILE_DIR)/sokol_debugtext.o" "$(DERIVED_FILE_DIR)/sokol_shape.o"'
-    dependencies:
-      - target: SDL/SDL3
-        embed: true
-        codeSign: true
-      - sdk: OpenGLES.framework
-      - sdk: Foundation.framework
-      - sdk: QuartzCore.framework
-      - sdk: CoreGraphics.framework
-      - sdk: UIKit.framework
-    preBuildScripts:
-      - name: Compile Odin app + sokol headers
-        script: |
-          set -e
-          root="$SRCROOT/../.."
-          out="$DERIVED_FILE_DIR"
-          odin_bin=$(command -v odin || echo /opt/homebrew/bin/odin)
-          case $PLATFORM_NAME in iphoneos) plat=iphone;; iphonesimulator) plat=iphonesimulator;; *) echo "unsupported platform" >&2; exit 1;; esac
-          objs=()
-          for arch in $ARCHS; do
-            "$odin_bin" build "$root/app" -collection:libs="$root/vendors" \
-              -define:SMOKE_FRAMES="${SMOKE_FRAMES:-0}" -define:SAMPLE_ID="${SAMPLE_ID:-0}" \
-              -o:speed -target:darwin_arm64 -subtarget:$plat -minimum-os-version:17.4 \
-              -build-mode:obj -no-entry-point -out:"$out/odin-$plat-$arch.o"
-            objs+=("$out/odin-$plat-$arch.o")
-          done
-          if [ ${#objs[@]} -gt 1 ]; then
-            xcrun lipo -create "${objs[@]}" -output "$out/odin-app.o"
-          else
-            cp "${objs[0]}" "$out/odin-app.o"
-          fi
-          for unit in gfx gl debugtext shape; do
-            case $unit in
-              gfx)       header=sokol_gfx.h;       cflags="-DSOKOL_IMPL -include sokol_log.h";;
-              gl)        header=sokol_gl.h;        cflags="-DSOKOL_GL_IMPL -include sokol_gfx.h";;
-              debugtext) header=sokol_debugtext.h; cflags="-DSOKOL_DEBUGTEXT_IMPL -include sokol_gfx.h";;
-              shape)     header=sokol_shape.h;     cflags="-DSOKOL_SHAPE_IMPL -include sokol_gfx.h";;
-            esac
-            for arch in $ARCHS; do
-              xcrun -sdk "$SDKROOT" clang -x c -c -arch "$arch" -O2 -DSOKOL_NO_ENTRY -DSOKOL_GLES3 $cflags \
-                -I"$root/vendors/sokol" "$root/vendors/sokol/$header" -o "$out/sokol_$unit-$arch.o"
-            done
-            if [ ${#ARCHS[@]} -gt 1 ]; then
-              xcrun lipo -create "$out"/sokol_$unit-*.o -output "$out/sokol_$unit.o"
-            else
-              cp "$out/sokol_$unit-${ARCHS[0]}.o" "$out/sokol_$unit.o"
-            fi
-          done
-        basedOnDependencyAnalysis: false
-        showEnvVars: false
-        outputFiles:
-          - $(DERIVED_FILE_DIR)/odin-app.o
-schemes:
-  odin-sokol:
-    build:
-      targets:
-        odin-sokol: all
-`
-}
