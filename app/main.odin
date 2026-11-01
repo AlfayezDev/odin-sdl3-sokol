@@ -12,6 +12,7 @@ SAMPLE_ID :: #config(SAMPLE_ID, 0)
 
 width, height: i32 = 480, 800
 window: ^sdl.Window
+sg_ready: bool
 gl: sdl.GLContext
 frames: i32
 
@@ -22,6 +23,8 @@ frame_dt, frame_time: f32
 // glReadPixels, loaded through SDL's GL loader
 Gl_Read_Pixels :: #type proc "c" (x, y, w, h: i32, format, typ: u32, pixels: rawptr)
 gl_read_pixels: Gl_Read_Pixels
+Gl_Get_Error :: #type proc "c" () -> u32
+gl_get_error: Gl_Get_Error
 
 frame_tick :: proc() {
     if perf_freq == 0 {
@@ -92,18 +95,41 @@ read_verify_pixels :: proc(w, h: i32, pixels: []u8) -> bool {
 @(export)
 odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.AppResult {
     context = runtime.default_context()
+    if !sdl.Init(sdl.INIT_VIDEO) {
+        sdl.Log("init: SDL_Init(video) failed: %s", sdl.GetError())
+        return .FAILURE
+    }
     set_gl_attributes()
 
     window = sdl.CreateWindow("Odin + sokol_gfx", width, height, sdl.WindowFlags{.OPENGL, .RESIZABLE})
-    if window == nil do return .FAILURE
+    if window == nil {
+        sdl.Log("init: CreateWindow failed: %s", sdl.GetError())
+        if sdl.GL_LoadLibrary(nil) == false {
+            sdl.Log("init: GL probe: %s", sdl.GetError())
+        }
+        return .FAILURE
+    }
 
     gl = sdl.GL_CreateContext(window)
-    if gl == nil do return .FAILURE
+    if gl == nil {
+        sdl.Log("init: GL_CreateContext failed: %s", sdl.GetError())
+        return .FAILURE
+    }
     sdl.GL_MakeCurrent(window, gl)
 
     gl_read_pixels = transmute(Gl_Read_Pixels)(sdl.GL_GetProcAddress("glReadPixels"))
 
+    // some drivers (e.g. Mali after eglMakeCurrent) queue a stale GL error;
+    // sokol's init asserts on a clean error state, so drain the queue first
+    gl_get_error = transmute(Gl_Get_Error)(sdl.GL_GetProcAddress("glGetError"))
+    if gl_get_error != nil {
+        for i in 0..<64 {
+            if gl_get_error() == 0 do break
+        }
+    }
+
     sg.setup(&sg.Desc{pipeline_pool_size = 512})
+    sg_ready = true
     sample_init(SAMPLE_ID)
     return .CONTINUE
 }
@@ -145,8 +171,10 @@ odin_app_Event :: proc "c" (state: rawptr, event: ^sdl.Event) -> sdl.AppResult {
 @(export)
 odin_app_Quit :: proc "c" (state: rawptr, result: sdl.AppResult) {
     context = runtime.default_context()
-    sample_shutdown(SAMPLE_ID)
-    sg.shutdown()
+    if sg_ready {
+        sample_shutdown(SAMPLE_ID)
+        sg.shutdown()
+    }
     if window != nil do sdl.DestroyWindow(window)
     sdl.Quit()
 }

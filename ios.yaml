@@ -11,7 +11,7 @@ targets:
     type: application
     platform: iOS
     sources:
-      - build/ios/entry.m
+      - ios/entry.m
     settings:
       base:
         CLANG_ENABLE_OBJC_ARC: YES

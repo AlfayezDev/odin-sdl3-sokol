@@ -111,6 +111,7 @@ gen_sdl_config :: proc(out_path, template_path: string, defines_csv: string) {
 		s := strings.trim_space(line)
 		if strings.has_prefix(s, "#cmakedefine ") {
 			name := strings.trim_space(s[len("#cmakedefine"):])
+			if sp := find(name, " "); sp >= 0 do name = name[:sp]
 			if defines[name] {
 				fmt.sbprintf(&b, "#define %s 1\n", name)
 			} else {
@@ -118,6 +119,7 @@ gen_sdl_config :: proc(out_path, template_path: string, defines_csv: string) {
 			}
 		} else if strings.has_prefix(s, "#cmakedefine01 ") {
 			name := strings.trim_space(s[len("#cmakedefine01"):])
+			if sp := find(name, " "); sp >= 0 do name = name[:sp]
 			v := i32(0)
 			if defines[name] do v = 1
 			fmt.sbprintf(&b, "#define %s %d\n", name, v)
@@ -126,12 +128,6 @@ gen_sdl_config :: proc(out_path, template_path: string, defines_csv: string) {
 		}
 	}
 	txt := strings.to_string(b)
-	// strip @VAR@ markers (single-line pairs)
-	for strings.contains(txt, "@") {
-		i := find(txt, "@")
-		j := find(txt[i + 1:], "@") + i32(i) + 1
-		txt = fmt.tprintf("%s%s", txt[:i], txt[j + 1:])
-	}
 	_ = os.write_entire_file_from_string(out_path, txt)
 }
 
@@ -144,9 +140,11 @@ ensure_sdl_sources :: proc() {
 		fail("failed to download SDL3-3.2.28 tarball")
 	}
 	// checksum + extract
-	check := "#!/bin/sh\npython3 - <<'PY'\nimport hashlib, sys\ndata = open('deps/SDL3.tar.gz', 'rb').read()\nif hashlib.sha256(data).hexdigest() != '1330671214d146f8aeb1ed399fc3e081873cdb38b5189d1f8bb6ab15bbc04211':\n    sys.exit('SDL checksum mismatch')\nPY\n"
-	_ = os.write_entire_file_from_string("deps/check_sdl.sh", check)
-	if !sh("sh deps/check_sdl.sh") {
+	sum_cmd := "sha256sum deps/SDL3.tar.gz"
+	if !sh("command -v sha256sum >/dev/null") {
+		sum_cmd = "shasum -a 256 deps/SDL3.tar.gz"
+	}
+	if !sh(fmt.tprintf("%s | grep -q ^1330671214d146f8aeb1ed399fc3e081873cdb38b5189d1f8bb6ab15bbc04211", sum_cmd)) {
 		fail("SDL checksum mismatch")
 	}
 	if !sh("tar xf deps/SDL3.tar.gz -C deps && rm -f deps/SDL3.tar.gz deps/check_sdl.sh") {
@@ -158,6 +156,7 @@ sokol_objects :: proc(out_dir: string, backend, cc: string) {
 	units := [4]string{"gfx", "gl", "debugtext", "shape"}
 	sh(fmt.tprintf("mkdir -p %s/obj", out_dir))
 	for unit in units {
+		header := fmt.tprintf("sokol_%s.h", unit)
 		flags := ""
 		if unit == "gfx" {
 			flags = "-DSOKOL_IMPL -include sokol_log.h"
@@ -165,8 +164,8 @@ sokol_objects :: proc(out_dir: string, backend, cc: string) {
 			flags = fmt.tprintf("-DSOKOL_%s_IMPL -include sokol_gfx.h", strings.to_upper(unit))
 		}
 		cmd := fmt.tprintf(
-			"%s -x c -c -O2 -DSOKOL_NO_ENTRY -D%s %s -I%s/include %s/include/%s -o %s/obj/sokol_%s.o",
-			cc, backend, flags, out_dir, sdl_dir(), unit, out_dir, unit,
+			"%s -x c -c -O2 -DSOKOL_NO_ENTRY -D%s %s -I%s -I vendors/sokol vendors/sokol/%s -o %s/obj/sokol_%s.o",
+			cc, backend, flags, out_dir, header, out_dir, unit,
 		)
 		if !sh(cmd) {
 			fail(fmt.tprintf("sokol %s header compile failed", unit))
@@ -179,7 +178,7 @@ join :: proc(parts: []string) -> string {
 	strings.builder_init(&b)
 	for p in parts {
 		strings.write_string(&b, p)
-		strings.write_rune(&b, ' ')
+		strings.write_rune(&b, '\n')
 	}
 	return strings.to_string(b)
 }
@@ -353,8 +352,8 @@ build_desktop :: proc(sample_id, smoke: i32) {
 		gen_sdl_config("build/desktop/SDL_build_config.h",
 			fmt.tprintf("%s/include/build_config/SDL_build_config.h.cmake", sdl_dir()),
 			"SDL_VIDEO_DRIVER_COCOA SDL_VIDEO_OPENGL SDL_AUDIO_DRIVER_COREAUDIO SDL_AUDIO_DRIVER_DUMMY SDL_THREAD_PTHREAD SDL_TIMER_UNIX SDL_FILESYSTEM_COCOA SDL_POWER_DARWIN SDL_LOADSO_DLOPEN SDL_LOCALE_COCOA SDL_MISC_COCOA SDL_DIALOG_COCOA SDL_TRAY_COCOA SDL_JOYSTICK_COCOA SDL_JOYSTICK_MFI SDL_SENSOR_COREMOTION SDL_GPU_DISABLED SDL_RENDER_DISABLED SDL_HIDAPI_DISABLED SDL_CAMERA_DISABLED")
-		sokol_objects("build/desktop", "SOKOL_GLCORE", "clang -Ideps/SDL3-3.2.28/include")
-		linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_*.o -Wl,--end-group -framework Cocoa -framework IOKit -framework Metal -framework CoreVideo -framework CoreAudio -framework CoreHaptics -framework GameController -framework CoreBluetooth -framework CoreMotion -framework AudioToolbox -framework QuartzCore -framework Foundation -ldl -lpthread -lm"
+		sokol_objects("build/desktop", "SOKOL_GLCORE", "clang")
+		linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -framework Cocoa -framework IOKit -framework Metal -framework CoreVideo -framework CoreAudio -framework CoreHaptics -framework GameController -framework CoreBluetooth -framework CoreMotion -framework AudioToolbox -framework QuartzCore -framework Foundation -ldl -lpthread -lm"
 		if !sh(fmt.tprintf(
 			"odin build app -collection:libs=vendors -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
 			smoke, sample_id, linker,
@@ -368,15 +367,16 @@ build_desktop :: proc(sample_id, smoke: i32) {
 	// linux
 	gen_sdl_config("build/desktop/SDL_build_config.h",
 		fmt.tprintf("%s/include/build_config/SDL_build_config.h.cmake", sdl_dir()),
-		"SDL_VIDEO_DRIVER_X11 SDL_VIDEO_DRIVER_DUMMY SDL_VIDEO_OPENGL SDL_VIDEO_OPENGL_GLX SDL_AUDIO_DRIVER_DUMMY SDL_THREAD_PTHREAD SDL_THREAD_PTHREAD_RECURSIVE_MUTEX SDL_THREAD_PTHREAD_RECURSIVE_MUTEX_NP SDL_TIMER_UNIX SDL_FILESYSTEM_UNIX SDL_LOADSO_DLOPEN SDL_POWER_LINUX SDL_PROCESS_POSIX SDL_JOYSTICK_LINUX SDL_JOYSTICK_DUMMY SDL_DIALOG_DUMMY SDL_LOCALE_UNIX SDL_MISC_UNIX SDL_TRAY_UNIX SDL_STORAGE_GENERIC HAVE_X11_XLIB_H SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS SDL_INPUT_LINUXEV HAVE_LINUX_INPUT_H HAVE_CLOCK_GETTIME HAVE_LIBC HAVE_STDIO_H HAVE_STDLIB_H HAVE_STRING_H HAVE_STDDEF_H HAVE_ERRNO_H HAVE_MATH_H HAVE_LIMITS_H HAVE_INTTYPES_H HAVE_STDINT_H HAVE_STRINGS_H HAVE_SIGNAL_H HAVE_FLOAT_H HAVE_STDARG_H HAVE_CTYPE_H HAVE_TIME_H HAVE_SYS_TYPES_H HAVE_DLOPEN HAVE_GETENV SDL_GPU_DISABLED SDL_RENDER_DISABLED SDL_HAPTIC_DISABLED SDL_HIDAPI_DISABLED SDL_SENSOR_DISABLED SDL_CAMERA_DISABLED SDL_FSOPS_POSIX")
+		"SDL_VIDEO_DRIVER_X11 SDL_VIDEO_DRIVER_DUMMY SDL_VIDEO_OPENGL SDL_VIDEO_OPENGL_GLX SDL_AUDIO_DRIVER_DUMMY SDL_THREAD_PTHREAD SDL_THREAD_PTHREAD_RECURSIVE_MUTEX SDL_THREAD_PTHREAD_RECURSIVE_MUTEX_NP SDL_TIMER_UNIX SDL_TIME_UNIX SDL_FILESYSTEM_UNIX SDL_LOADSO_DLOPEN SDL_POWER_LINUX SDL_PROCESS_POSIX SDL_JOYSTICK_LINUX SDL_JOYSTICK_DUMMY SDL_DIALOG_DUMMY SDL_LOCALE_UNIX SDL_MISC_UNIX SDL_TRAY_UNIX SDL_STORAGE_GENERIC HAVE_X11_XLIB_H SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS SDL_INPUT_LINUXEV HAVE_LINUX_INPUT_H HAVE_CLOCK_GETTIME HAVE_LIBC HAVE_STDIO_H HAVE_STDLIB_H HAVE_STRING_H HAVE_STDDEF_H HAVE_ERRNO_H HAVE_MATH_H HAVE_LIMITS_H HAVE_INTTYPES_H HAVE_STDINT_H HAVE_STRINGS_H HAVE_SIGNAL_H HAVE_FLOAT_H HAVE_STDARG_H HAVE_CTYPE_H HAVE_TIME_H HAVE_SYS_TYPES_H HAVE_DLOPEN HAVE_GETENV SDL_GPU_DISABLED SDL_RENDER_DISABLED SDL_HAPTIC_DISABLED SDL_HIDAPI_DISABLED SDL_SENSOR_DISABLED SDL_CAMERA_DISABLED SDL_FSOPS_POSIX SDL_HAPTIC_LINUX")
 	sokol_objects("build/desktop", "SOKOL_GLCORE", "clang")
+	_ = os.write_entire_file_from_string("build/desktop/sources.txt", fmt.tprintf("%s\n", sdl_sources_linux()))
 	if !sh(fmt.tprintf(
-		"cd %s && bash -c 'set -e; : > objs.txt; while read -r f; do o=\"build/desktop/obj/$(printf %%s \"${f#deps/SDL3-3.2.28/}\" | tr / _).o\"; echo \"$o $ROOT/$f\" >> objs.txt; done < build/desktop/sources.txt; cat objs.txt | xargs -P \"$(nproc)\" -L1 sh -c '\"$0\" -x c -c -O2 -fPIC -I\"build/desktop\" -I\"deps/SDL3-3.2.28/include\" -I\"deps/SDL3-3.2.28/src\" \"$2\" -o \"$1\"' _ \"clang\"; ar rcs build/desktop/libSDL3.a build/desktop/obj/*.o'",
-		root(),
+		"ROOT=%q OUT_DIR=build/desktop CC=clang SDL_DIR=%q SOURCES_FILE=build/desktop/sources.txt sh sdl3_build.sh",
+		root(), sdl_dir(),
 	)) {
 		fail("SDL3 source build failed")
 	}
-	linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_*.o -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
+	linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
 	if !sh(fmt.tprintf(
 		"odin build app -collection:libs=vendors -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
 		smoke, sample_id, linker,
@@ -400,13 +400,14 @@ sdl_sources_linux :: proc() -> string {
 		"deps/SDL3-3.2.28/src/core/linux/SDL_evdev_kbd.c",
 		"deps/SDL3-3.2.28/src/core/unix/SDL_poll.c", "deps/SDL3-3.2.28/src/core/unix/SDL_appid.c",
 		"deps/SDL3-3.2.28/src/cpuinfo/*.c",
-		"deps/SDL3-3.2.28/src/dialog/SDL_dialog.c", "deps/SDL3-3.2.28/src/dialog/SDL_dialog_utils.c",
+		"deps/SDL3-3.2.28/src/dialog/SDL_dialog.c", "deps/SDL3-3.2.28/src/dialog/SDL_dialog_utils.c", "deps/SDL3-3.2.28/src/dialog/unix/*.c",
 		"deps/SDL3-3.2.28/src/dynapi/*.c",
 		"deps/SDL3-3.2.28/src/events/*.c",
-		"deps/SDL3-3.2.28/src/filesystem/SDL_filesystem.c", "deps/SDL3-3.2.28/src/filesystem/posix/*.c",
+		"deps/SDL3-3.2.28/src/filesystem/SDL_filesystem.c", "deps/SDL3-3.2.28/src/filesystem/unix/*.c", "deps/SDL3-3.2.28/src/filesystem/posix/SDL_sysfsops.c",
 		"deps/SDL3-3.2.28/src/gpu/*.c",
-		"deps/SDL3-3.2.28/src/haptic/SDL_haptic.c",
+		"deps/SDL3-3.2.28/src/haptic/SDL_haptic.c", "deps/SDL3-3.2.28/src/haptic/linux/*.c",
 		"deps/SDL3-3.2.28/src/hidapi/SDL_hidapi.c",
+		"deps/SDL3-3.2.28/src/camera/SDL_camera.c", "deps/SDL3-3.2.28/src/camera/v4l2/*.c",
 		"deps/SDL3-3.2.28/src/io/*.c", "deps/SDL3-3.2.28/src/io/generic/*.c",
 		"deps/SDL3-3.2.28/src/joystick/*.c", "deps/SDL3-3.2.28/src/joystick/dummy/*.c", "deps/SDL3-3.2.28/src/joystick/linux/*.c",
 		"deps/SDL3-3.2.28/src/libm/*.c",
@@ -431,32 +432,6 @@ sdl_sources_linux :: proc() -> string {
 	})
 }
 
-build_sdl3_sources :: proc(platform, out_dir, cc: string) {
-	list := ""
-	if platform == "linux" {
-		list = sdl_sources_linux()
-	} else {
-		fail(fmt.tprintf("sdl source build for %s not supported", platform))
-	}
-	list_file := fmt.tprintf("%s/sources.txt", out_dir)
-	_ = os.write_entire_file_from_string(list_file, list)
-	// shell: compile in parallel, then archive
-	script := fmt.tprintf(
-		`cd "$ROOT"
-: > "%s/objs.txt"
-while read -r f; do
-  o="%s/obj/$(printf %%s "${f#deps/SDL3-3.2.28/}" | tr / _).o"
-  echo "$o $ROOT/$f" >> "%s/objs.txt"
-done < "%s"
-cat "%s/objs.txt" | xargs -P "$(sysctl -n hw.ncpu 2>/dev/null || nproc)" -L1 sh -c '$0 -x c -c -O2 -fPIC -I"%s" -I"$SDLDIR/include" -I"$SDLDIR/src" "$2" -o "$1"' _ "$CC"
-`,
-		out_dir, out_dir, out_dir, list_file, out_dir, out_dir,
-	)
-	_ = os.write_entire_file_from_string(fmt.tprintf("%s/compile.sh", out_dir), fmt.tprintf("#!/bin/sh\nROOT=%q\nCC=%q\nSDLDIR=%q\n%s", root(), cc, sdl_dir(), script))
-	if !sh(fmt.tprintf("ROOT=%q CC=%q SDLDIR=%q sh %s/compile.sh", root(), cc, sdl_dir(), out_dir)) {
-		fail("SDL3 source build failed")
-	}
-}
 
 // ------------------------------------------------------------ android
 
@@ -480,7 +455,7 @@ printf '%s' "$NDK" > build/android_ndk_path
 
 	gen_sdl_config(fmt.tprintf("%s/SDL_build_config.h", out_dir),
 		fmt.tprintf("%s/include/build_config/SDL_build_config.h.cmake", sdl_dir()),
-		"SDL_VIDEO_DRIVER_ANDROID SDL_VIDEO_OPENGL_EGL SDL_AUDIO_DRIVER_DUMMY SDL_THREAD_PTHREAD SDL_TIMER_UNIX SDL_FILESYSTEM_ANDROID SDL_LOADSO_DLOPEN SDL_JOYSTICK_DISABLED SDL_DIALOG_DISABLED SDL_GPU_DISABLED SDL_RENDER_DISABLED SDL_HAPTIC_DISABLED SDL_HIDAPI_DISABLED SDL_SENSOR_DISABLED SDL_CAMERA_DISABLED")
+		"SDL_VIDEO_DRIVER_ANDROID SDL_VIDEO_OPENGL_EGL SDL_VIDEO_OPENGL_ES2 SDL_AUDIO_DRIVER_DUMMY SDL_THREAD_PTHREAD SDL_TIMER_UNIX SDL_TIME_UNIX HAVE_LIBC HAVE_STDIO_H HAVE_STDLIB_H HAVE_STRING_H HAVE_STDDEF_H HAVE_ERRNO_H HAVE_SETENV HAVE_TIME_H HAVE_SYS_TYPES_H SDL_FILESYSTEM_ANDROID SDL_FSOPS_POSIX SDL_LOADSO_DLOPEN SDL_JOYSTICK_DISABLED SDL_DIALOG_DISABLED SDL_GPU_DISABLED SDL_RENDER_DISABLED SDL_HAPTIC_DUMMY SDL_HIDAPI_DISABLED SDL_SENSOR_DUMMY SDL_CAMERA_DRIVER_ANDROID SDL_PROCESS_DUMMY SDL_CAMERA_DISABLED")
 
 	sdl_list := join([]string{
 		"deps/SDL3-3.2.28/src/*.c",
@@ -492,10 +467,13 @@ printf '%s' "$NDK" > build/android_ndk_path
 		"deps/SDL3-3.2.28/src/dynapi/*.c",
 		"deps/SDL3-3.2.28/src/events/*.c",
 		"deps/SDL3-3.2.28/src/filesystem/SDL_filesystem.c", "deps/SDL3-3.2.28/src/filesystem/android/*.c",
+		"deps/SDL3-3.2.28/src/filesystem/posix/SDL_sysfsops.c",
 		"deps/SDL3-3.2.28/src/gpu/*.c",
-		"deps/SDL3-3.2.28/src/haptic/SDL_haptic.c",
+		"deps/SDL3-3.2.28/src/haptic/SDL_haptic.c", "deps/SDL3-3.2.28/src/haptic/dummy/SDL_syshaptic.c",
 		"deps/SDL3-3.2.28/src/hidapi/SDL_hidapi.c", "deps/SDL3-3.2.28/src/hidapi/android/hid.cpp",
+		"deps/SDL3-3.2.28/src/camera/SDL_camera.c", "deps/SDL3-3.2.28/src/camera/android/SDL_camera_android.c",
 		"deps/SDL3-3.2.28/src/io/*.c", "deps/SDL3-3.2.28/src/io/generic/*.c",
+		"deps/SDL3-3.2.28/src/power/android/*.c", "deps/SDL3-3.2.28/src/sensor/dummy/SDL_dummysensor.c",
 		"deps/SDL3-3.2.28/src/joystick/*.c", "deps/SDL3-3.2.28/src/joystick/dummy/*.c",
 		"deps/SDL3-3.2.28/src/libm/*.c",
 		"deps/SDL3-3.2.28/src/loadso/dlopen/*.c",
@@ -518,29 +496,14 @@ printf '%s' "$NDK" > build/android_ndk_path
 	})
 	_ = os.write_entire_file_from_string(fmt.tprintf("%s/sources.txt", out_dir), sdl_list)
 
-	build_script := fmt.tprintf(
-		`#!/bin/sh
-set -e
-NDK=%q
-CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android29 --sysroot=$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
-CCPP="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-linux-android29 --sysroot=$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
-ROOT=%q
-OUT=%q
-cd "$ROOT"
-rm -f "$OUT"/obj/*.o
-while read -r f; do
-  case "$f" in *.cpp)
-    $CCPP -x c++ -c -O2 -fPIC -I"$OUT" -I"$SDLDIR/include" -I"$SDLDIR/src" "$ROOT/$f" -o "$OUT/obj/$(echo "${f#deps/SDL3-3.2.28/}" | tr / _).o"
-    continue ;;
-  esac
-  $CC -x c -c -O2 -fPIC -I"$OUT" -I"$SDLDIR/include" -I"$SDLDIR/src" "$ROOT/$f" -o "$OUT/obj/$(echo "${f#deps/SDL3-3.2.28/}" | tr / _).o"
-done < "%s/sources.txt"
-$CC -shared -Wl,-soname,libSDL3.so -o "$OUT/libSDL3.so" "$OUT"/obj/*.o -llog -landroid -lEGL -lGLESv3 -ldl -lm -lc++_static -lc++abi
-`,
-		ndk, root(), fmt.tprintf("%s/%s", root(), out_dir), out_dir,
+	android_cc := fmt.tprintf(
+		"%s/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android29 --sysroot=%s/toolchains/llvm/prebuilt/linux-x86_64/sysroot",
+		ndk, ndk,
 	)
-	_ = os.write_entire_file_from_string(fmt.tprintf("%s/build_sdl.sh", out_dir), build_script)
-	if !sh(fmt.tprintf("SDLDIR=%q sh %s/build_sdl.sh", sdl_dir(), out_dir)) {
+	if !sh(fmt.tprintf(
+		"ROOT=%q OUT_DIR=%q CC=%q SDL_DIR=%q SOURCES_FILE=%s/sources.txt SHARED=1 LINK_LIBS=%q sh sdl3_build.sh",
+		root(), out_dir, android_cc, sdl_dir(), out_dir, "-llog -landroid -lEGL -lGLESv3 -ldl -lm -lc++_static -lc++abi",
+	)) {
 		fail("SDL3 android build failed")
 	}
 
@@ -560,7 +523,7 @@ $CC -shared -Wl,-soname,libSDL3.so -o "$OUT/libSDL3.so" "$OUT"/obj/*.o -llog -la
 	llvm_objcopy := fmt.tprintf("%s/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objcopy", ndk)
 	sh(fmt.tprintf("%s --redefine-sym sdl_main_provider=SDL_main %s/odin-app.o", llvm_objcopy, out_dir))
 	link := fmt.tprintf(
-		"%s/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-linux-android29 --sysroot=%s/toolchains/llvm/prebuilt/linux-x86_64/sysroot -shared -Wl,-soname,libmain.so -o %s/libmain.so %s/odin-app.o %s/obj/sokol_*.o -L%s -lSDL3 -lEGL -lGLESv3 -llog -landroid -ldl -lm -lc++_static -lc++abi",
+		"%s/toolchains/llvm/prebuilt/linux-x86_64/bin/clang --target=aarch64-linux-android29 --sysroot=%s/toolchains/llvm/prebuilt/linux-x86_64/sysroot -shared -Wl,-soname,libmain.so -o %s/libmain.so %s/odin-app.o %s/obj/sokol_*.o -L%s -lSDL3 -lEGL -lGLESv3 -llog -landroid -ldl -lm",
 		ndk, ndk, out_dir, out_dir, out_dir, out_dir,
 	)
 	if !sh(link) {
@@ -588,20 +551,7 @@ build_ios :: proc(sample_id, smoke: i32) {
 		fail("ios builds require macOS")
 	}
 	// generated ObjC trampoline: SDL callbacks forwarded to the Odin app
-	entry_m := `#define SDL_MAIN_USE_CALLBACKS 1
-#include <SDL3/SDL_main.h>
-
-extern SDL_AppResult odin_app_Init(void **, int, char **);
-extern SDL_AppResult odin_app_Iterate(void *);
-extern SDL_AppResult odin_app_Event(void *, SDL_Event *);
-extern void odin_app_Quit(void *, SDL_AppResult);
-SDL_AppResult SDL_AppInit(void **s, int n, char **v) { return odin_app_Init(s, n, v); }
-SDL_AppResult SDL_AppIterate(void *s) { return odin_app_Iterate(s); }
-SDL_AppResult SDL_AppEvent(void *s, SDL_Event *e) { return odin_app_Event(s, e); }
-void SDL_AppQuit(void *s, SDL_AppResult r) { odin_app_Quit(s, r); }
-`
 	sh("mkdir -p build/ios")
-	_ = os.write_entire_file_from_string("build/ios/entry.m", entry_m)
 	if !sh("xcodegen generate --spec ios.yaml --project build/ios") {
 		fail("xcodegen failed")
 	}
