@@ -1,0 +1,5 @@
+inputs = [
+	"./src/test.h"
+]
+
+output_folder = "binding"

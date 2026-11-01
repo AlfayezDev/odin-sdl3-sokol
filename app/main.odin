@@ -119,6 +119,8 @@ odin_app_Init :: proc "c" (state: ^rawptr, argc: i32, argv: [^]cstring) -> sdl.A
 
     gl_read_pixels = transmute(Gl_Read_Pixels)(sdl.GL_GetProcAddress("glReadPixels"))
 
+    bridge_init()
+
     // some drivers (e.g. Mali after eglMakeCurrent) queue a stale GL error;
     // sokol's init asserts on a clean error state, so drain the queue first
     gl_get_error = transmute(Gl_Get_Error)(sdl.GL_GetProcAddress("glGetError"))

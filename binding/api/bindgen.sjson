@@ -1,0 +1,5 @@
+inputs = ["."]
+output_folder = "../../vendors/bridge"
+package_name = "bridge"
+import_lib = "bridge"
+remove = ["odin_hello", "odin_add"]
