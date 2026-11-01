@@ -1,25 +1,32 @@
 # Odin + SDL3 + sokol_gfx
 
-The same Odin demo as `odin-sdl3-mobile` on a sokol_gfx graphics stack:
-SDL3 as the platform layer (window/input/context), sokol_gfx as the renderer
-(GL core backend on desktop, GLES3 on mobile later).
+One Odin app, 12 sokol_gfx demos, SDL3 as the platform layer.
+All build/run logic lives in `build.odin` — run it with odin itself.
 
-- compute dispatch writes `[11, 14, 17, 20]` into a storage buffer
-- the render pass reads the storage buffer and encodes the values into the
-  framebuffer alpha channel, verified by readback asserts
-- one Slang module (`shaders/app.slang`) → GLSL per sokol's GL backend,
-  processed by `scripts/shaders.py`
+## Build & run
 
 ```sh
-./scripts/deps.sh            # fetch SDL3 (pinned)
-odin run . -- desktop        # build + run
+odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
+odin run . -- android    # NDK build, gradle APK, adb install + launch
+odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 ```
 
-## Status
+`desktop` is the default. Env: `SAMPLE_ID` (0–11), `SMOKE_FRAMES` (exit after N frames).
 
-| Platform | Backend | Status |
-|---|---|---|
-| Linux desktop | GL core (SDL3) | ✅ |
-| macOS / Windows | GL core (SDL3) | planned |
-| Android | GLES3 (SDL3) | planned |
-| iOS | GLES3/Metal (SDL3) | planned |
+## Samples (SAMPLE_ID)
+
+0 triangle · 1 quad · 2 mandelbrot · 3 cube · 4 instancing · 5 offscreen ·
+6 dyntex · 7 mrt · 8 blend · 9 shapes · 10 sgl · 11 debugtext
+
+## Layout
+
+- `app/` — all Odin code (`main.odin`, `samples.odin`, `math4.odin`)
+- `vendors/sokol/` — vendored sokol C headers (the only C)
+- `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
+- `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
+- `shaders/samples/*.glsl` — shader sources; regenerate bindings with
+  `python3 scripts/shdc.py` after editing
+
+The vendored sokol headers are the only C in the build: compiled straight
+from the headers with impl defines, per platform, by whatever clang the
+host provides (desktop), the NDK (android), or Xcode (ios).
