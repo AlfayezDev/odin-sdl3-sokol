@@ -1,21 +1,30 @@
 package bridgegen
 
-// bridgegen: reads the constrained C contract (binding/api/bridge.h) and
-// generates the Kotlin bridge object + the JNI glue C file for Android.
+// bridgegen: the single binding generator. Reads the plain-text contract
+// (binding/api/bridge.spec) and emits every artifact:
 //
-//   odin_*     exports -> Kotlin `external fun` + Java_<class>_<method>
-//                C wrappers that call the Odin export.
-//   platform_* imports -> C implementations that up-call into Kotlin
-//                through cached jclass/jmethodID (attached threads).
+//   --hdr <bridge.h>     C header (consumed by Swift bridging, JNI glue, desktop stub)
+//   --odin <bridge.odin> Odin foreign procs (odin -> platform imports)
+//   --kt  <OdinBridge.kt> Kotlin bridge object
+//   --jni  <bridge_jni.c> JNI_OnLoad + Java_<class>_<method> wrappers + up-calls
 //
-// Supported types: void, bool, int32_t, float, const char*.
-// Prototypes must be single-line and end with ");".
+// Direction is encoded in the name prefix:
+//   odin_*     implemented in Odin via @(export); Kotlin gets external funs,
+//              platforms call the C symbol directly.
+//   platform_* implemented by the platform; Odin calls them through the
+//              foreign block; Android up-calls into Kotlin.
+//
+// spec types: string, int, bool, float, double, int64
+// spec format (one per line, '#' comments):
+//   package <java.package>
+//   class   <ClassName>
+//   fn name(param: type, ...) -> type        (ret optional, defaults void)
 //
 // usage:
-//   bridgegen --header binding/api/bridge.h \
+//   bridgegen --spec binding/api/bridge.spec --hdr binding/api/bridge.h \
+//             --odin vendors/bridge/bridge.odin \
 //             --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt \
-//             --jni build/gen/bridge_jni.c \
-//             --package dev.alfayez.odinsokol --class OdinBridge
+//             --jni build/gen/bridge_jni.c
 
 import "core:c"
 import "core:fmt"
@@ -48,7 +57,7 @@ fail :: proc(msg: string) {
 
 Param :: struct {
 	name: string,
-	typ:  string, // canonical: "void" "bool" "int32_t" "float" "const char*"
+	typ:  string, // spec name: "string" "int" "bool" "float" "double" "int64"
 }
 
 Func :: struct {
@@ -58,26 +67,131 @@ Func :: struct {
 	is_export: bool, // odin_ prefix
 }
 
-canonical_type :: proc(t: string) -> string {
-	c, _ := strings.replace(t, " ", "", -1)
-	out, _ := strings.replace(c, "*", "", -1)
-	return out
+Spec :: struct {
+	package_name: string,
+	class_name:   string,
+	funcs:        [dynamic]Func,
 }
 
-is_ptr :: proc(t: string) -> bool {
-	return strings.contains(t, "*")
+// ---- type maps: spec name -> per-language spelling ----
+
+c_type :: proc(t: string) -> string {
+	if t == "string" {
+		return "const char *"
+	}
+	if t == "int" {
+		return "int32_t"
+	}
+	if t == "int64" {
+		return "int64_t"
+	}
+	if t == "bool" {
+		return "bool"
+	}
+	if t == "float" {
+		return "float"
+	}
+	if t == "double" {
+		return "double"
+	}
+	if t == "void" {
+		return "void"
+	}
+	return ""
+}
+
+kotlin_type :: proc(t: string) -> string {
+	if t == "string" {
+		return "String"
+	}
+	if t == "int" {
+		return "Int"
+	}
+	if t == "int64" {
+		return "Long"
+	}
+	if t == "bool" {
+		return "Boolean"
+	}
+	if t == "float" {
+		return "Float"
+	}
+	if t == "double" {
+		return "Double"
+	}
+	return t
+}
+
+jni_type :: proc(t: string) -> string {
+	if t == "string" {
+		return "jstring"
+	}
+	if t == "int" {
+		return "jint"
+	}
+	if t == "int64" {
+		return "jlong"
+	}
+	if t == "bool" {
+		return "jboolean"
+	}
+	if t == "float" {
+		return "jfloat"
+	}
+	if t == "double" {
+		return "jdouble"
+	}
+	return "void"
+}
+
+jni_sig :: proc(t: string) -> string {
+	if t == "string" {
+		return "Ljava/lang/String;"
+	}
+	if t == "int" {
+		return "I"
+	}
+	if t == "int64" {
+		return "J"
+	}
+	if t == "bool" {
+		return "Z"
+	}
+	if t == "float" {
+		return "F"
+	}
+	if t == "double" {
+		return "D"
+	}
+	return "V"
+}
+
+odin_type :: proc(t: string) -> string {
+	if t == "string" {
+		return "cstring"
+	}
+	if t == "int" {
+		return "i32"
+	}
+	if t == "int64" {
+		return "i64"
+	}
+	if t == "bool" {
+		return "b32"
+	}
+	if t == "float" {
+		return "f32"
+	}
+	if t == "double" {
+		return "f64"
+	}
+	return t
 }
 
 check_type :: proc(t: string, site: string) {
-	c := canonical_type(t)
-	if is_ptr(t) {
-		if c != "constchar" {
-			fail(fmt.tprintf("unsupported pointer type '%s' (%s) — whitelist: const char*", t, site))
-		}
-		return
-	}
-	if c != "void" && c != "bool" && c != "int32_t" && c != "float" {
-		fail(fmt.tprintf("unsupported type '%s' (%s) — whitelist: void, bool, int32_t, float, const char*", t, site))
+	ok := t == "void" || t == "string" || t == "int" || t == "bool" || t == "float" || t == "double" || t == "int64"
+	if !ok {
+		fail(fmt.tprintf("unknown type '%s' (%s) — spec types: string, int, int64, bool, float, double (+ implicit void returns)", t, site))
 	}
 }
 
@@ -90,179 +204,185 @@ camel :: proc(s: string) -> string {
 			continue
 		}
 		up := p[0]
-		if up >= 'a' && up <= 'z' do up -= 'a' - 'A'
+		if up >= 'a' && up <= 'z' {
+			up -= 'a' - 'A'
+		}
 		out = fmt.tprintf("%s%c%s", out, rune(up), p[1:])
 	}
 	return out
 }
 
-parse_prototype :: proc(line_in: string) -> (f: Func, ok: bool) {
-	line := strings.trim_space(line_in)
-	if !strings.contains(line, "(") || !strings.has_suffix(line, ");") {
-		return
-	}
-	open := strings.index_byte(line, '(')
-	close := strings.last_index_byte(line, ')')
-	if open < 0 || close < open {
-		return
-	}
-	left := strings.trim_space(line[:open])
-	inner := strings.trim_space(line[open + 1:close])
+// ---- spec parsing ----
 
-	toks := make([dynamic]string)
-	for tok in strings.split(left, " ") {
-		t := strings.trim_space(tok)
-		if len(t) > 0 {
-			append(&toks, t)
-		}
-	}
-	if len(toks) < 2 {
-		return
-	}
-	name_tok := toks[len(toks) - 1]
-	name := strings.trim_space(strings.trim_left(name_tok, "*"))
-	if !strings.has_prefix(name, "odin_") && !strings.has_prefix(name, "platform_") {
-		return
-	}
-	star := name_tok != name
-	ret := strings.join(toks[:len(toks) - 1], " ")
-	if star {
-		ret = fmt.tprintf("%s *", ret)
-	}
-	check_type(ret, fmt.tprintf("%s return", name))
-
-	f.name = name
-	f.ret = ret
-	f.is_export = strings.has_prefix(name, "odin_")
-	f.params = make([dynamic]Param)
-
-	if inner == "void" {
-		return f, true
-	}
-	if len(inner) > 0 {
-		for p in strings.split(inner, ",") {
-			ptoks := make([dynamic]string)
-			for tok in strings.split(strings.trim_space(p), " ") {
-				pt := strings.trim_space(tok)
-				if len(pt) > 0 {
-					append(&ptoks, pt)
-				}
-			}
-			if len(ptoks) < 2 {
-				fail(fmt.tprintf("cannot parse param '%s' of %s", p, name))
-			}
-			pname_tok := ptoks[len(ptoks) - 1]
-			pname := strings.trim_space(strings.trim_left(pname_tok, "*"))
-			pstar := pname_tok != pname
-			ptype := strings.join(ptoks[:len(ptoks) - 1], " ")
-			if pstar {
-				ptype = fmt.tprintf("%s *", ptype)
-			}
-			check_type(ptype, fmt.tprintf("%s(%s)", name, pname))
-			append(&f.params, Param{pname, ptype})
-		}
-	}
-	return f, true
-}
-
-parse_header :: proc(path: string) -> [dynamic]Func {
+parse_spec :: proc(path: string) -> Spec {
 	data, err := os.read_entire_file_from_path(path, context.allocator)
 	if err != nil {
-		fail(fmt.tprintf("cannot read header %s", path))
+		fail(fmt.tprintf("cannot read spec %s", path))
 	}
-	funcs := make([dynamic]Func)
+	s := Spec{funcs = make([dynamic]Func)}
 	for line in strings.split(string(data), "\n") {
-		s := strings.trim_space(line)
-		if len(s) == 0 || s[0] == '/' || s[0] == '*' || s[0] == '#' {
+		l := strings.trim_space(line)
+		if len(l) == 0 || l[0] == '#' {
 			continue
 		}
-		if f, ok := parse_prototype(s); ok {
-			append(&funcs, f)
+		if strings.has_prefix(l, "package ") {
+			s.package_name = strings.trim_space(l[len("package"):])
+			continue
 		}
+		if strings.has_prefix(l, "class ") {
+			s.class_name = strings.trim_space(l[len("class"):])
+			continue
+		}
+		if !strings.has_prefix(l, "fn ") {
+			continue
+		}
+		rest := strings.trim_space(l[3:])
+		ret := "void"
+		if arrow := strings.index_byte(rest, '>'); arrow >= 0 {
+			// find the "-> " separator: scan for '-' followed by '>'
+			arrow_idx := -1
+			for i := 0; i < len(rest) - 1; i += 1 {
+				if rest[i] == '-' && rest[i + 1] == '>' {
+					arrow_idx = i
+					break
+				}
+			}
+			if arrow_idx < 0 {
+				fail(fmt.tprintf("bad fn line: %s", l))
+			}
+			ret = strings.trim_space(rest[arrow_idx + 2:])
+			rest = strings.trim_space(rest[:arrow_idx])
+		}
+		open := strings.index_byte(rest, '(')
+		close := strings.last_index_byte(rest, ')')
+		if open < 0 || close < open || close != len(rest) - 1 {
+			fail(fmt.tprintf("bad fn line: %s", l))
+		}
+		name := strings.trim_space(rest[:open])
+		if !strings.has_prefix(name, "odin_") && !strings.has_prefix(name, "platform_") {
+			fail(fmt.tprintf("fn name must start with odin_ or platform_: %s", name))
+		}
+		check_type(ret, fmt.tprintf("%s return", name))
+
+		f := Func{name = name, ret = ret, is_export = strings.has_prefix(name, "odin_"), params = make([dynamic]Param)}
+		inner := strings.trim_space(rest[open + 1:close])
+		if len(inner) > 0 && inner != "void" {
+			for p in strings.split(inner, ",") {
+				colon := strings.index_byte(p, ':')
+				if colon < 0 {
+					fail(fmt.tprintf("param needs 'name: type': '%s' in %s", strings.trim_space(p), name))
+				}
+				pname := strings.trim_space(p[:colon])
+				ptype := strings.trim_space(p[colon + 1:])
+				check_type(ptype, fmt.tprintf("%s(%s)", name, pname))
+				append(&f.params, Param{pname, ptype})
+			}
+		}
+		append(&s.funcs, f)
 	}
 	exports, imports := 0, 0
-	for f in funcs {
+	for f in s.funcs {
 		if f.is_export {
 			exports += 1
 		} else {
 			imports += 1
 		}
 	}
-	if exports + imports == 0 {
-		fail("no odin_*/platform_* prototypes found in header")
+	if s.package_name == "" || s.class_name == "" || exports + imports == 0 {
+		fail("spec needs 'package', 'class' and at least one fn")
 	}
 	fmt.println("bridgegen: parsed", exports, "export(s),", imports, "import(s)")
-	return funcs
+	return s
 }
 
-// ---- type maps ----
+// ---- emitters ----
 
-kotlin_type :: proc(t: string) -> string {
-	c := canonical_type(t)
-	if is_ptr(t) && c == "constchar" {
-		return "String"
-	}
-	if c == "bool" {
-		return "Boolean"
-	}
-	if c == "int32_t" {
-		return "Int"
-	}
-	if c == "float" {
-		return "Float"
-	}
-	return c
-}
-
-jni_type :: proc(t: string) -> string {
-	c := canonical_type(t)
-	if is_ptr(t) && c == "constchar" {
-		return "jstring"
-	}
-	if c == "bool" {
-		return "jboolean"
-	}
-	if c == "int32_t" {
-		return "jint"
-	}
-	if c == "float" {
-		return "jfloat"
-	}
-	return "void"
-}
-
-jni_sig :: proc(t: string) -> string {
-	c := canonical_type(t)
-	if is_ptr(t) && c == "constchar" {
-		return "Ljava/lang/String;"
-	}
-	if c == "bool" {
-		return "Z"
-	}
-	if c == "int32_t" {
-		return "I"
-	}
-	if c == "float" {
-		return "F"
-	}
-	return "V"
-}
-
-// ---- kotlin emission ----
-
-emit_kotlin :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
+// C header: the ABI contract consumed by Swift (bridging header), the JNI
+// glue and the desktop stub. Committed: stable, reviewable, tiny.
+emit_header :: proc(path: string, spec: Spec) {
 	b: strings.Builder
 	strings.builder_init(&b)
-	strings.write_string(&b, fmt.tprintf("package %s\n\n", package_name))
-	strings.write_string(&b, "// generated by bridgegen from binding/api/bridge.h — do not edit by hand.\n")
-	strings.write_string(&b, "// regenerate: build/tools/bridgegen --header binding/api/bridge.h --kt <this file> --jni build/gen/bridge_jni.c\n\n")
-	strings.write_string(&b, fmt.tprintf("object %s ", class_name))
+	strings.write_string(&b, "/* generated by bridgegen from binding/api/bridge.spec — do not edit by hand.\n")
+	strings.write_string(&b, "   the spec is the source of truth; regenerate with: odin run . -- bridge */\n")
+	strings.write_string(&b, "#ifndef BRIDGE_H\n#define BRIDGE_H\n\n#include <stdint.h>\n#include <stdbool.h>\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n")
+	strings.write_string(&b, "/* platform -> odin */\n")
+	for f in spec.funcs {
+		if !f.is_export {
+			continue
+		}
+		cs := make([dynamic]string)
+		for p in f.params {
+			append(&cs, fmt.tprintf("%s %s", c_type(p.typ), p.name))
+		}
+		args := strings.join(cs[:], ", ")
+		if len(cs) == 0 {
+			args = "void"
+		}
+		strings.write_string(&b, fmt.tprintf("%s %s(%s);\n\n", c_type(f.ret), f.name, args))
+	}
+	strings.write_string(&b, "/* odin -> platform */\n")
+	for f in spec.funcs {
+		if f.is_export {
+			continue
+		}
+		cs := make([dynamic]string)
+		for p in f.params {
+			append(&cs, fmt.tprintf("%s %s", c_type(p.typ), p.name))
+		}
+		args := strings.join(cs[:], ", ")
+		if len(cs) == 0 {
+			args = "void"
+		}
+		strings.write_string(&b, fmt.tprintf("void %s(%s);\n\n", f.name, args))
+	}
+	strings.write_string(&b, "#ifdef __cplusplus\n}\n#endif\n\n#endif /* BRIDGE_H */\n")
+	_ = os.write_entire_file_from_string(path, strings.to_string(b))
+	fmt.println("bridgegen: wrote", path)
+}
+
+// Odin foreign block: only the platform_* half (odin_* are real @(export)
+// procs in app/bridge.odin — declaring them foreign would be a clash).
+// The foreign import points at the desktop-linked archive; android/ios
+// build in obj mode where it is inert.
+emit_odin :: proc(path: string, spec: Spec) {
+	b: strings.Builder
+	strings.builder_init(&b)
+	strings.write_string(&b, "// generated by bridgegen from binding/api/bridge.spec — do not edit by hand.\n")
+	strings.write_string(&b, "// regenerate with: odin run . -- bridge\n")
+	strings.write_string(&b, "package bridge\n\nforeign import lib \"../../build/desktop/libbridge.a\"\n_ :: lib\n\n@(default_calling_convention=\"c\")\nforeign lib {\n")
+	for f in spec.funcs {
+		if f.is_export {
+			continue
+		}
+		ps := make([dynamic]string)
+		for p in f.params {
+			append(&ps, fmt.tprintf("%s: %s", p.name, odin_type(p.typ)))
+		}
+		if f.ret == "void" {
+			strings.write_string(&b, fmt.tprintf("\t%s :: proc(%s) ---\n", f.name, strings.join(ps[:], ", ")))
+		} else {
+			strings.write_string(&b, fmt.tprintf("\t%s :: proc(%s) -> %s ---\n", f.name, strings.join(ps[:], ", "), odin_type(f.ret)))
+		}
+	}
+	strings.write_string(&b, "}\n")
+	_ = os.write_entire_file_from_string(path, strings.to_string(b))
+	fmt.println("bridgegen: wrote", path)
+}
+
+// Kotlin bridge object: external funs for exports, dispatcher funs for imports.
+emit_kotlin :: proc(path: string, spec: Spec) {
+	b: strings.Builder
+	strings.builder_init(&b)
+	strings.write_string(&b, fmt.tprintf("package %s\n\n", spec.package_name))
+	strings.write_string(&b, "// generated by bridgegen from binding/api/bridge.spec — do not edit by hand.\n")
+	strings.write_string(&b, "// regenerate with: odin run . -- bridge\n\n")
+	strings.write_string(&b, fmt.tprintf("object %s ", spec.class_name))
 	strings.write_string(&b, "{\n")
 	strings.write_string(&b, "    // set by the host activity before any bridge call\n")
 	strings.write_string(&b, "    @JvmStatic lateinit var activity: android.app.Activity\n\n")
 
 	strings.write_string(&b, "    // ---- kotlin -> odin (exports) ----\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if !f.is_export {
 			continue
 		}
@@ -279,7 +399,7 @@ emit_kotlin :: proc(path, package_name, class_name: string, funcs: [dynamic]Func
 	}
 
 	strings.write_string(&b, "    // ---- odin -> platform (called through JNI from libmain) ----\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if f.is_export {
 			continue
 		}
@@ -303,7 +423,7 @@ emit_kotlin :: proc(path, package_name, class_name: string, funcs: [dynamic]Func
 
 	strings.write_string(&b, "    @JvmStatic fun onPlatformEvent(name: String, args: List<Any>) {\n")
 	strings.write_string(&b, "        when (name) {\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if f.is_export {
 			continue
 		}
@@ -316,20 +436,19 @@ emit_kotlin :: proc(path, package_name, class_name: string, funcs: [dynamic]Func
 	fmt.println("bridgegen: wrote", path)
 }
 
-// ---- jni c emission ----
-
-emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
-	pkg_u, _ := strings.replace(package_name, ".", "_", -1)
+// JNI glue: JNI_OnLoad (caches JavaVM + class + method ids), Java_<class>_<method>
+// wrappers for exports, C implementations of platform_* with up-calls.
+emit_jni :: proc(path: string, spec: Spec) {
+	pkg_u, _ := strings.replace(spec.package_name, ".", "_", -1)
 	b: strings.Builder
 	strings.builder_init(&b)
 
-	strings.write_string(&b, "// generated by bridgegen from binding/api/bridge.h — do not edit by hand.\n")
+	strings.write_string(&b, "// generated by bridgegen from binding/api/bridge.spec — do not edit by hand.\n")
 	strings.write_string(&b, "#include <jni.h>\n#include <string.h>\n#include \"bridge.h\"\n\n")
 	strings.write_string(&b, "static JavaVM *g_jvm;\nstatic jclass g_class;\n")
 
-	// method-id cache for up-calls
 	strings.write_string(&b, "// ---- odin -> platform: cached method ids ----\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if f.is_export {
 			continue
 		}
@@ -338,10 +457,10 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 	strings.write_string(&b, "\nJNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {\n")
 	strings.write_string(&b, "    (void)reserved;\n    g_jvm = vm;\n    JNIEnv *env = 0;\n")
 	strings.write_string(&b, "    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;\n")
-	strings.write_string(&b, fmt.tprintf("    jclass local = (*env)->FindClass(env, \"%s/%s\");\n", package_name, class_name))
+	strings.write_string(&b, fmt.tprintf("    jclass local = (*env)->FindClass(env, \"%s/%s\");\n", spec.package_name, spec.class_name))
 	strings.write_string(&b, "    if (!local) return JNI_ERR;\n")
 	strings.write_string(&b, "    g_class = (*env)->NewGlobalRef(env, local);\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if f.is_export {
 			continue
 		}
@@ -361,9 +480,8 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 	strings.write_string(&b, "    if (state == JNI_EDETACHED) (*g_jvm)->AttachCurrentThread(g_jvm, &env, 0);\n")
 	strings.write_string(&b, "    return env;\n}\n\n")
 
-	// kotlin -> odin wrappers
 	strings.write_string(&b, "// ---- kotlin -> odin: export wrappers ----\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if !f.is_export {
 			continue
 		}
@@ -372,19 +490,17 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 		call_args := make([dynamic]string)
 		prelude := make([dynamic]string)
 		epilogue := make([dynamic]string)
-		for p, idx in f.params {
+		for p in f.params {
 			append(&jni_params, fmt.tprintf("%s %s", jni_type(p.typ), p.name))
-			c := canonical_type(p.typ)
-			if is_ptr(p.typ) {
+			if p.typ == "string" {
 				append(&prelude, fmt.tprintf("    const char *p_%s = (*env)->GetStringUTFChars(env, %s, 0);\n", p.name, p.name))
 				append(&call_args, fmt.tprintf("p_%s", p.name))
 				append(&epilogue, fmt.tprintf("    (*env)->ReleaseStringUTFChars(env, %s, p_%s);\n", p.name, p.name))
 			} else {
 				append(&call_args, p.name)
 			}
-			_ = idx
 		}
-		strings.write_string(&b, fmt.tprintf("JNIEXPORT %s JNICALL Java_%s_%s_%s(JNIEnv *env, jclass clazz", jni_type(f.ret), pkg_u, class_name, kname))
+		strings.write_string(&b, fmt.tprintf("JNIEXPORT %s JNICALL Java_%s_%s_%s(JNIEnv *env, jclass clazz", jni_type(f.ret), pkg_u, spec.class_name, kname))
 		if len(jni_params) > 0 {
 			strings.write_string(&b, fmt.tprintf(", %s", strings.join(jni_params[:], ", ")))
 		}
@@ -395,7 +511,7 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 		call := fmt.tprintf("%s(%s)", f.name, strings.join(call_args[:], ", "))
 		if f.ret == "void" {
 			strings.write_string(&b, fmt.tprintf("    %s;\n", call))
-		} else if is_ptr(f.ret) {
+		} else if f.ret == "string" {
 			strings.write_string(&b, fmt.tprintf("    return (*env)->NewStringUTF(env, %s);\n", call))
 		} else {
 			strings.write_string(&b, fmt.tprintf("    return %s;\n", call))
@@ -406,16 +522,15 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 		strings.write_string(&b, "}\n\n")
 	}
 
-	// odin -> platform up-calls
 	strings.write_string(&b, "// ---- odin -> platform: jni up-calls ----\n")
-	for f in funcs {
+	for f in spec.funcs {
 		if f.is_export {
 			continue
 		}
 		kname := camel(f.name[9:])
 		c_params := make([dynamic]string)
 		for p in f.params {
-			append(&c_params, fmt.tprintf("%s %s", p.typ, p.name))
+			append(&c_params, fmt.tprintf("%s %s", c_type(p.typ), p.name))
 		}
 		strings.write_string(&b, fmt.tprintf("void %s(", f.name))
 		if len(c_params) > 0 {
@@ -429,8 +544,7 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 		call_args := make([dynamic]string)
 		locals := make([dynamic]string)
 		for p, idx in f.params {
-			j := jni_type(p.typ)
-			if j == "jstring" {
+			if p.typ == "string" {
 				strings.write_string(&b, fmt.tprintf("    jstring jarg%d = (*env)->NewStringUTF(env, %s);\n", idx, p.name))
 				append(&call_args, fmt.tprintf("jarg%d", idx))
 				append(&locals, fmt.tprintf("    (*env)->DeleteLocalRef(env, jarg%d);\n", idx))
@@ -438,11 +552,10 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 				append(&call_args, p.name)
 			}
 		}
-		sigs := make([dynamic]string)
+		param_sigs := make([dynamic]string)
 		for p in f.params {
-			append(&sigs, jni_sig(p.typ))
+			append(&param_sigs, jni_sig(p.typ))
 		}
-		append(&sigs, jni_sig(f.ret))
 		strings.write_string(&b, fmt.tprintf("    (*env)->CallStaticVoidMethod(env, g_class, g_mid_%s", kname))
 		if len(call_args) > 0 {
 			strings.write_string(&b, fmt.tprintf(", %s", strings.join(call_args[:], ", ")))
@@ -458,39 +571,74 @@ emit_jni :: proc(path, package_name, class_name: string, funcs: [dynamic]Func) {
 	fmt.println("bridgegen: wrote", path)
 }
 
+// parity check: every odin_* in the spec should have a matching @(export)
+// proc somewhere in app/*.odin (text-level scan — catches silent breaks).
+parity_check :: proc(spec_dir, app_dir: string, spec: Spec) {
+	for f in spec.funcs {
+		if !f.is_export {
+			continue
+		}
+		found := false
+		entries, err := os.read_directory_by_path(app_dir, -1, context.temp_allocator)
+		if err != nil {
+			continue
+		}
+		for e in entries {
+			if !strings.has_suffix(e.name, ".odin") {
+				continue
+			}
+			data, rerr := os.read_entire_file_from_path(jp(app_dir, e.name), context.temp_allocator)
+			if rerr != nil {
+				continue
+			}
+			if strings.contains(string(data), fmt.tprintf("%s :: proc", f.name)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fail(fmt.tprintf("parity: spec declares '%s' but no proc '%s :: proc' found in %s (missing @(export) implementation?)", f.name, f.name, app_dir))
+		}
+	}
+	fmt.println("bridgegen: parity ok — all odin_* exports implemented in app/")
+}
+
 main :: proc() {
 	args := os.args
-	header, kt_out, jni_out, package_name, class_name := "", "", "", "", ""
+	spec_file, hdr_out, odin_out, kt_out, jni_out := "", "", "", "", ""
 	i := 1
 	for i < len(args) {
 		a := args[i]
-		if a == "--header" && i + 1 < len(args) {
+		if a == "--spec" && i + 1 < len(args) {
 			i += 1
-			header = args[i]
+			spec_file = args[i]
+		} else if a == "--hdr" && i + 1 < len(args) {
+			i += 1
+			hdr_out = args[i]
+		} else if a == "--odin" && i + 1 < len(args) {
+			i += 1
+			odin_out = args[i]
 		} else if a == "--kt" && i + 1 < len(args) {
 			i += 1
 			kt_out = args[i]
 		} else if a == "--jni" && i + 1 < len(args) {
 			i += 1
 			jni_out = args[i]
-		} else if a == "--package" && i + 1 < len(args) {
-			i += 1
-			package_name = args[i]
-		} else if a == "--class" && i + 1 < len(args) {
-			i += 1
-			class_name = args[i]
 		} else {
 			fail(fmt.tprintf("unknown argument: %s", a))
 		}
 		i += 1
 	}
-	if header == "" || kt_out == "" || jni_out == "" || package_name == "" || class_name == "" {
-		fmt.println("usage: bridgegen --header <bridge.h> --kt <OdinBridge.kt> --jni <bridge_jni.c> --package <java.package> --class <ClassName>")
+	if spec_file == "" || hdr_out == "" || odin_out == "" || kt_out == "" || jni_out == "" {
+		fmt.println("usage: bridgegen --spec <bridge.spec> --hdr <bridge.h> --odin <bridge.odin> --kt <OdinBridge.kt> --jni <bridge_jni.c>")
 		os.exit(1)
 	}
 
-	funcs := parse_header(header)
+	spec := parse_spec(spec_file)
+	parity_check(jp(filepath.dir(spec_file), "../.."), "app", spec)
 	sh(fmt.tprintf("mkdir -p '%s'", jp(filepath.dir(jni_out))))
-	emit_kotlin(kt_out, package_name, class_name, funcs)
-	emit_jni(jni_out, package_name, class_name, funcs)
+	emit_header(hdr_out, spec)
+	emit_odin(odin_out, spec)
+	emit_kotlin(kt_out, spec)
+	emit_jni(jni_out, spec)
 }

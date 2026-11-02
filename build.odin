@@ -37,11 +37,26 @@ main :: proc() {
 		build_ios(sample_id, smoke)
 	case "shaders":
 		run_shaders()
+	case "bridge":
+		gen_bridge()
 	case:
 		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders]")
+		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bridge]")
 		os.exit(1)
 	}
+}
+
+// regenerate all binding artifacts from binding/api/bridge.spec
+gen_bridge :: proc() {
+	if !sh("test -x build/tools/bridgegen") {
+		if !sh("odin build tools/bridgegen/src -o:speed -out:build/tools/bridgegen") {
+			fail("bridgegen build failed")
+		}
+	}
+	if !sh("build/tools/bridgegen --spec binding/api/bridge.spec --hdr binding/api/bridge.h --odin vendors/bridge/bridge.odin --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c") {
+		fail("bridgegen failed")
+	}
+	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, bridge_jni.c")
 }
 
 // ------------------------------------------------------------ helpers
@@ -521,15 +536,8 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("odin android object build failed")
 	}
 
-	// bridgegen: kotlin bridge + jni glue from binding/api/bridge.h
-	if !sh("test -x build/tools/bridgegen") {
-		if !sh("odin build tools/bridgegen/src -o:speed -out:build/tools/bridgegen") {
-			fail("bridgegen build failed")
-		}
-	}
-	if !sh("build/tools/bridgegen --header binding/api/bridge.h --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --package dev.alfayez.odinsokol --class OdinBridge") {
-		fail("bridgegen failed")
-	}
+	// bridgegen: kotlin bridge + jni glue from binding/api/bridge.spec
+	gen_bridge()
 	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/api build/gen/bridge_jni.c -o build/gen/bridge_jni.o", android_cc)) {
 		fail("bridge_jni.c compile failed")
 	}
