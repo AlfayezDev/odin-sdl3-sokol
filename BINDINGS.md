@@ -71,3 +71,11 @@ missing implementation is a compile error, not a silent runtime break.
   parameters.
 - Declarations must be single-line. Export bodies open with `{` on the
   declaration line.
+
+
+## Runtime flow (worked example)
+
+See [`docs/bindings-example/README.md`](docs/bindings-example/README.md)
+for the full walkthrough of how `hello` travels Kotlin → JNI wrapper →
+Odin, and `show_toast` travels Odin → JNI up-call → Kotlin dispatcher →
+Toast, with the generated symbol names at each hop.
