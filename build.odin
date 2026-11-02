@@ -53,7 +53,7 @@ gen_bridge :: proc() {
 			fail("bridgegen build failed")
 		}
 	}
-	if !sh("build/tools/bridgegen --spec binding/api/bridge.spec --hdr binding/api/bridge.h --odin vendors/bridge/bridge.odin --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c") {
+	if !sh("build/tools/bridgegen --source app/bridge.odin --hdr binding/api/bridge.h --odin vendors/bridge/bridge.odin --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --package dev.alfayez.odinsokol --class OdinBridge") {
 		fail("bridgegen failed")
 	}
 	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, bridge_jni.c")

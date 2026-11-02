@@ -5,7 +5,7 @@
 // desktop uses binding/desktop/bridge.c.
 import UIKit
 
-@_cdecl("platform_show_toast")
+@_cdecl("show_toast")
 public func platformShowToast(msg: UnsafePointer<CChar>) {
 	let message = String(cString: msg)
 	DispatchQueue.main.async {

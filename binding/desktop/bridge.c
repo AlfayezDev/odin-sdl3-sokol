@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "bridge.h"
 
-void platform_show_toast(const char *msg) {
+void show_toast(const char *msg) {
 	printf("[toast] %s\n", msg);
 	fflush(stdout);
 }

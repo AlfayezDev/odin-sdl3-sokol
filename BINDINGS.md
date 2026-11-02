@@ -1,69 +1,73 @@
 # Bindings — Odin ↔ Kotlin ↔ iOS
 
-One spec file is the contract. Everything else is generated.
+One Odin file is the contract: **`app/bridge.odin`**. Every `proc "c"`
+declaration in it is part of the cross-language API, and `bridgegen`
+(vendored under `tools/bridgegen`) turns it into all platform plumbing.
 
+## The rule
+
+```odin
+hello :: proc "c" () -> cstring { ... }   // body = Odin implements it
+show_toast :: proc "c" (msg: cstring)     // no body = the platform implements it
 ```
-binding/api/bridge.spec    # ← the only thing you edit
-```
 
-`bridgegen` (vendored under `tools/bridgegen`) emits all four artifacts:
+- **With a body** → an export. Callers: Kotlin gets `external fun hello()`,
+  Swift calls it directly through the generated header.
+- **Without a body** → an import. Implement it per platform (Swift
+  `@_cdecl`, the generated Kotlin dispatcher, or the desktop stub); Odin
+  calls it through the generated foreign block (`libs:bridge`).
 
-| Output | Consumed by |
-|---|---|
-| `binding/api/bridge.h` — C ABI header | Swift (bridging header), JNI glue, desktop stub |
-| `vendors/bridge/bridge.odin` — Odin `foreign` procs | the app (`libs:bridge`) |
-| `binding/android/java/.../OdinBridge.kt` — Kotlin bridge object | the Activity |
-| `build/gen/bridge_jni.c` — JNI_OnLoad + wrappers + up-calls (gitignored) | `libmain.so` link |
+## Adding a binding — 2 steps
 
-Regenerate: `odin run . -- bridge` (the android target runs it automatically).
-
-## Adding a binding — 3 steps
-
-1. **Declare** in `binding/api/bridge.spec`:
-
-   ```
-   fn odin_set_volume(f: float)
-   ```
-
-   - `odin_*` → implemented in Odin, called by platforms
-   - `platform_*` → implemented on the platform, called by Odin
-
-2. **Implement the logic**:
+1. **Declare + implement** in `app/bridge.odin`:
 
    ```odin
-   // app/bridge.odin
    @(export)
-   odin_set_volume :: proc "c" (f: f32) {
+   set_volume :: proc "c" (f: f32) {
        volume = f
    }
    ```
 
-   For `platform_*` you implement the platform side instead — Swift
-   (`@_cdecl("platform_…")`), Kotlin (`onPlatformEvent` dispatcher), or the
-   desktop stub.
+   (For imports, write the declaration without a body, then implement the
+   platform side: Swift/Kotlin/desktop stub.)
 
-3. **`odin run . -- bridge`** — done. The parity check warns if a spec'd
-   `odin_*` function has no matching `@(export)` proc in `app/`.
+2. **`odin run . -- bridge`** — done. All artifacts regenerate; the
+   android/ios targets also regenerate automatically when you build them.
 
-## Spec types → per-language map
+## What bridgegen emits
 
-| spec     | C header   | Odin   | Kotlin  | JNI      | sig                   |
-|----------|------------|--------|---------|----------|-----------------------|
-| `string` | `const char *` | `cstring` | `String`  | `jstring`  | `Ljava/lang/String;` |
-| `int`    | `int32_t`  | `i32`  | `Int`   | `jint`   | `I`                   |
-| `int64`  | `int64_t`  | `i64`  | `Long`  | `jlong`  | `J`                   |
-| `float`  | `float`    | `f32`  | `Float` | `jfloat` | `F`                   |
-| `double` | `double`   | `f64`  | `Double`| `jdouble`| `D`                   |
-| `bool`   | `bool`     | `b32`  | `Boolean`| `jboolean`| `Z`                 |
+| Output | Consumed by |
+|---|---|
+| `binding/api/bridge.h` — C ABI header | Swift bridging header, JNI glue, desktop stub |
+| `vendors/bridge/bridge.odin` — foreign procs for imports | the app (`libs:bridge`) |
+| `binding/android/java/.../OdinBridge.kt` — Kotlin bridge object | the Activity |
+| `build/gen/bridge_jni.c` — JNI_OnLoad + wrappers + up-calls (gitignored) | `libmain.so` link |
+
+The parity check is built in: an export *is* its implementation, so a
+missing implementation is a compile error, not a silent runtime break.
+
+## Type map
+
+| odin     | C header        | Kotlin   | JNI      | sig                   |
+|----------|-----------------|----------|----------|-----------------------|
+| `cstring`| `const char *`  | `String` | `jstring`| `Ljava/lang/String;`  |
+| `i32`    | `int32_t`       | `Int`    | `jint`   | `I`                   |
+| `i64`    | `int64_t`       | `Long`   | `jlong`  | `J`                   |
+| `b32`    | `bool`          | `Boolean`| `jboolean`| `Z`                  |
+| `f32`    | `float`         | `Float`  | `jfloat` | `F`                   |
+| `f64`    | `double`        | `Double` | `jdouble`| `D`                   |
 
 ## Conventions
 
-- `odin_*` / `platform_*` prefixes decide direction — nothing else does.
-- Returned `string` is **borrowed** (Odin owns it, never freed by the caller);
+- **String ownership**: returned `cstring` is borrowed (Odin owns it);
   passed-in strings are copied by the receiver.
-- Kotlin-side dispatch: generated `platform_*` funs forward to
-  `onPlatformEvent(name, args)` on the UI thread — put platform behavior
-  in that `when` (it's committed glue, edit freely).
-- iOS has no generation at all: Swift imports the generated header through
-  `binding/ios/Bridging.h` and implements `platform_*` with `@_cdecl`.
-  `entry.m` is SDL C-entry machinery — not bindings, don't move it to Swift.
+- **Imports return nothing** in phase 1; they dispatch on the UI thread
+  through the generated `onPlatformEvent(name, args)` — put platform
+  behavior in that `when` block (committed glue, edit freely).
+- **iOS** has no generation: Swift imports the header via
+  `binding/ios/Bridging.h` and implements imports with `@_cdecl`.
+  `entry.m` is SDL C-entry machinery — keep it C, don't move it to Swift.
+- **Grouped params** work: `add :: proc "c" (a, b: i32)` expands to two
+  parameters.
+- Declarations must be single-line. Export bodies open with `{` on the
+  declaration line.
