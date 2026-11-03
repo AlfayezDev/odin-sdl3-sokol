@@ -59,7 +59,7 @@ outputs are ignored and recreated by `odin run builder -- bindings`.
 
 `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`
 
-Enums with an `i32` or `u32` base are supported, and `Nullable_CString`
+Enums with an explicit `i32` or `u32` base are supported, and `Nullable_CString`
 (alias of `cstring`) maps to optional strings. Nullable strings are currently
 limited to import parameters.
 

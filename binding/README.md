@@ -99,7 +99,7 @@ generated/ios/                      Swift bridge
 Supported types:
 
 - `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`
-- enums with an `i32` or `u32` base
+- enums with an explicit `i32` or `u32` base
 - `Nullable_CString :: cstring` for optional strings
 
 Example enum:

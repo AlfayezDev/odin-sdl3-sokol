@@ -76,12 +76,12 @@ collect_enum_decl :: proc(v: ^ast.Value_Decl, module: ^Module) -> string {
 }
 
 parse_enum_decl :: proc(name: string, e: ^ast.Enum_Type) -> (Enum, string) {
-	underlying := "i32"
-	if e.base_type != nil {
-		underlying = expr_string(e.base_type)
-		if underlying != "i32" && underlying != "u32" {
-			return {}, fmt.tprintf("enum %s: base type must be i32 or u32", name)
-		}
+	if e.base_type == nil {
+		return {}, fmt.tprintf("enum %s: base type must be explicitly i32 or u32", name)
+	}
+	underlying := expr_string(e.base_type)
+	if underlying != "i32" && underlying != "u32" {
+		return {}, fmt.tprintf("enum %s: base type must be i32 or u32", name)
 	}
 	fields := make([dynamic]Enum_Field)
 	next: i64 = 0
