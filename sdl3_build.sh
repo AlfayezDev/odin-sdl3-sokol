@@ -30,12 +30,6 @@ cat "$OUT_DIR/objs.txt" | xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -
   $CC -x "$lang" -c -O2 -fPIC -I"$CONFIG_DIR" -I"$SDL_DIR/include" -I"$SDL_DIR/src" "$2" -o "$1"
 ' _
 
-if [ "${SHARED:-0}" = "1" ]; then
-  rm -f "$OUT_DIR/libSDL3.so"
-  $CC -shared -Wl,-soname,libSDL3.so -o "$OUT_DIR/libSDL3.so" "$OUT_DIR"/obj_sdl/*.o $LINK_LIBS
-  echo "wrote $OUT_DIR/libSDL3.so"
-else
-  rm -f "$OUT_DIR/libSDL3.a"
-  ar rcs "$OUT_DIR/libSDL3.a" "$OUT_DIR"/obj_sdl/*.o
-  echo "wrote $OUT_DIR/libSDL3.a"
-fi
+rm -f "$OUT_DIR/libSDL3.a"
+ar rcs "$OUT_DIR/libSDL3.a" "$OUT_DIR"/obj_sdl/*.o
+echo "wrote $OUT_DIR/libSDL3.a"

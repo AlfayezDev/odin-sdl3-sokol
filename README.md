@@ -13,7 +13,7 @@ odin run . -- shaders    # sokol-shdc -> vendors/shaders
 odin run . -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
 
 odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
-odin run . -- android    # bindings + NDK build + gradle APK + adb install/launch
+odin run . -- android    # prebuilt SDL3 AAR + NDK build + gradle APK + adb install/launch
 odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 ```
 
@@ -34,7 +34,7 @@ Build entry points:
 - `build_sdl.odin` — SDL config and sokol object compilation
 - `build_shaders.odin` — sokol-shdc generation
 - `build_desktop.odin` / `build_android.odin` / `build_ios.odin` — platform builds
-- `sdl3_build.sh` — Linux/Android SDL3 source build helper
+- `sdl3_build.sh` — Linux SDL3 source build helper for desktop
 
 App code:
 
@@ -46,7 +46,8 @@ App code:
 
 Generated and vendored:
 
-- `deps/SDL3-3.2.28/` — SDL3 source, downloaded on first desktop/android build (not checked in)
+- `deps/SDL3-3.2.28/` — SDL3 source for desktop/iOS, downloaded on first build (not checked in)
+- `deps/SDL3-3.2.28.aar` — prebuilt SDL3 Android package, downloaded on first Android build (not checked in)
 - `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
