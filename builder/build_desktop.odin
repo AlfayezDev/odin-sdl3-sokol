@@ -38,7 +38,7 @@ build_desktop :: proc(sample_id, smoke: i32) {
 	sokol_objects("build/desktop", "SOKOL_GLCORE", "clang")
 	_ = os.write_entire_file_from_string("build/desktop/sources.txt", fmt.tprintf("%s\n", sdl_sources_linux()))
 	if !sh(fmt.tprintf(
-		"ROOT=%q OUT_DIR=build/desktop CC=clang SDL_DIR=%q SOURCES_FILE=build/desktop/sources.txt sh sdl3_build.sh",
+		"ROOT=%q OUT_DIR=build/desktop CC=clang SDL_DIR=%q SOURCES_FILE=build/desktop/sources.txt sh builder/sdl3_build.sh",
 		root(), sdl_dir(),
 	)) {
 		fail("SDL3 source build failed")

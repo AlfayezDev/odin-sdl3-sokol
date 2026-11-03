@@ -1,20 +1,20 @@
 # Odin + SDL3 + sokol_gfx
 
 One Odin app, 12 sokol_gfx demos, SDL3 as the platform layer.
-All build/run logic lives in `build.odin` + `build_*.odin` — run it with odin itself.
+All build/run logic lives in `builder/` — run it with odin itself.
 
 ## Build & run
 
 Requires Odin `dev-2026-11` (pinned in `.mise.toml`).
 
 ```sh
-odin run . -- tools      # build odinbinder + androidgen, verify sokol-shdc
-odin run . -- shaders    # sokol-shdc -> vendors/shaders
-odin run . -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
+odin run builder -- tools      # build odinbinder + androidgen, verify sokol-shdc
+odin run builder -- shaders    # sokol-shdc -> vendors/shaders
+odin run builder -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
 
-odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
-odin run . -- android    # prebuilt SDL3 AAR + NDK build + gradle APK + adb install/launch
-odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
+odin run builder -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
+odin run builder -- android    # prebuilt SDL3 AAR + NDK build + gradle APK + adb install/launch
+odin run builder -- ios        # xcodegen + xcodebuild simulator app (macOS)
 ```
 
 `desktop` is the default. Env: `SAMPLE_ID` (0–11), `SMOKE_FRAMES` (exit after N frames),
@@ -29,12 +29,12 @@ odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 
 Build entry points:
 
-- `build.odin` — CLI dispatch and shared helpers
-- `build_tools.odin` — odinbinder + androidgen bootstrap
-- `build_sdl.odin` — SDL config and sokol object compilation
-- `build_shaders.odin` — sokol-shdc generation
-- `build_desktop.odin` / `build_android.odin` / `build_ios.odin` — platform builds
-- `sdl3_build.sh` — Linux SDL3 source build helper for desktop
+- `builder/build.odin` — CLI dispatch and shared helpers
+- `builder/build_tools.odin` — odinbinder + androidgen bootstrap
+- `builder/build_sdl.odin` — SDL config and sokol object compilation
+- `builder/build_shaders.odin` — sokol-shdc generation
+- `builder/build_desktop.odin` / `builder/build_android.odin` / `builder/build_ios.odin` — platform builds
+- `builder/sdl3_build.sh` — Linux SDL3 source build helper for desktop
 
 App code:
 
@@ -51,13 +51,13 @@ Generated and vendored:
 - `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
-- `shaders/samples/*.glsl` — shader sources; regenerate with `odin run . -- shaders`
+- `shaders/samples/*.glsl` — shader sources; regenerate with `odin run builder -- shaders`
 - `binding/README.md` — how to write a binding on each platform
 - `binding/binding.odin` — the shared binding contract
-- `binding/generated/`, `binding/android/generated/`, `binding/ios/generated/` — generated on demand and ignored by git
+- `generated/` — generated on demand and ignored by git
 - `tools/odinbinder/` — Odin-native bridge generator
-- `tools/androidgen/` — vendored Android Gradle project generator
-- `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
+- `third_party/androidgen/` — vendored Android Gradle project generator
+- `third_party/sokol-shdc/` — pinned shader compiler binaries + fetch script
 
 The vendored sokol headers compile straight from the headers with impl defines,
 per platform, using whatever clang the host provides (desktop), the NDK

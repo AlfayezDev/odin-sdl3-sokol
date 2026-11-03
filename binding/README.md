@@ -4,7 +4,7 @@ Only the files outside `generated/` are written by hand. The generated folders
 are ignored by git and recreated by:
 
 ```sh
-odin run . -- bindings
+odin run builder -- bindings
 ```
 
 ## 1. The contract
@@ -82,9 +82,9 @@ public func odinbinder_ios_install() {
 ## Generated output
 
 ```text
-binding/generated/                  shared C header + Odin imports
-binding/android/generated/          Kotlin bridge + JNI glue
-binding/ios/generated/              Swift bridge
+generated/shared/                   shared C header + Odin imports
+generated/android/                  Kotlin bridge + JNI glue
+generated/ios/                      Swift bridge
 ```
 
 Supported types: `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`.

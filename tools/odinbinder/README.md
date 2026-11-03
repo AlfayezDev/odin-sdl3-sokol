@@ -38,18 +38,18 @@ attribute wins.
 odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
 build/tools/odinbinder generate --target all --spec binding \
-  --header binding/generated/bridge.h \
-  --odin binding/generated/bridge/bridge.odin \
-  --kotlin binding/android/generated/kotlin/dev/example/app/OdinBridge.kt \
-  --jni binding/android/generated/bridge_jni.c \
-  --swift binding/ios/generated/GameBridge.swift
+  --header generated/shared/bridge.h \
+  --odin generated/shared/bridge/bridge.odin \
+  --kotlin generated/android/kotlin/dev/example/app/OdinBridge.kt \
+  --jni generated/android/bridge_jni.c \
+  --swift generated/ios/GameBridge.swift
 
 build/tools/odinbinder check --spec binding
 ```
 
 `--target android|ios|all`. One contract feeds the header, Odin declarations,
 Kotlin/JNI, and Swift; `--target all` writes every output. In this repo the
-outputs are ignored and recreated by `odin run . -- bindings`.
+outputs are ignored and recreated by `odin run builder -- bindings`.
 
 ## Types
 

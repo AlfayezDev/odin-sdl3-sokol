@@ -1,15 +1,15 @@
-# tools
+# Build tools
 
-Three external tools drive generated code in this repo.
+One first-party generator and two vendored tools.
 
 ## odinbinder
 
-Vendored under `tools/odinbinder`. It parses the Odin binding contracts in
-`binding/spec/` and generates the C header, Odin foreign declarations, Kotlin
+Lives under `tools/odinbinder`. It parses the Odin binding contract in
+`binding/binding.odin` and generates the C header, Odin foreign declarations, Kotlin
 bridge, JNI glue, and Swift bridge.
 
 ```sh
-odin run . -- bindings
+odin run builder -- bindings
 ```
 
 Build it directly:
@@ -20,27 +20,27 @@ odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
 ## androidgen
 
-Vendored under `tools/androidgen` (source + Gradle wrapper). It generates the
-Android Gradle project from `binding/android/android.yaml`; bindings are owned
-by odinbinder.
+Vendored under `third_party/androidgen` (source + Gradle wrapper). It generates
+the Android Gradle project from `binding/android/android.yaml`; bindings are
+owned by odinbinder.
 
 ```sh
-odin run . -- android
+odin run builder -- android
 ```
 
 Build it directly:
 
 ```sh
-odin build tools/androidgen/src -o:speed -out:build/tools/androidgen
+odin build third_party/androidgen/src -o:speed -out:build/tools/androidgen
 ```
 
 ## sokol-shdc
 
-Pinned prebuilt shader compiler under `tools/sokol-shdc/bin/<platform>/`.
+Pinned prebuilt shader compiler under `third_party/sokol-shdc/bin/<platform>/`.
 
 ```sh
-tools/sokol-shdc/fetch.sh      # fetch the current platform binary if missing
-odin run . -- shaders          # compile shaders/samples/*.glsl
+third_party/sokol-shdc/fetch.sh      # fetch the current platform binary if missing
+odin run builder -- shaders          # compile shaders/samples/*.glsl
 ```
 
-`odin run . -- tools` builds odinbinder and androidgen, and verifies sokol-shdc.
+`odin run builder -- tools` builds odinbinder and androidgen, and verifies sokol-shdc.

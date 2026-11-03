@@ -1,4 +1,4 @@
-# androidgen spec for the generated Gradle project (android/ is generated).
+# androidgen spec for build/android-project (generated).
 # Hand-written Android glue lives next to this file.
 
 name: odin-sdl3-mobile
@@ -14,7 +14,7 @@ options:
     gradleVersion: 8.12
     gradleSha256: 7a00d51fb93147819aab76024feece20b6b84e420694101f276be952e08bef03
     kotlinVersion: 2.0.21
-    outputDirectory: ../../android
+    outputDirectory: ../../build/android-project
 
 configs:
   Debug: debug
@@ -28,6 +28,7 @@ targets:
       - path: .
         excludes:
           - android.yaml
+      - path: ../../generated/android/kotlin
       - path: ../../build/android/jni
         buildPhase: jniLibs
     dependencies:

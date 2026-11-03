@@ -1,13 +1,13 @@
 package odin_sokol_build
 
-// Unified build orchestrator. Usage:
-//   odin run . --            (desktop, default)
-//   odin run . -- tools      (build odinbinder + androidgen, verify sokol-shdc)
-//   odin run . -- shaders    (sokol-shdc -> vendors/shaders)
-//   odin run . -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
-//   odin run . -- desktop
-//   odin run . -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
-//   odin run . -- ios        (macOS only: xcodegen + xcodebuild simulator build)
+// Unified build orchestrator. Run from the repo root:
+//   odin run builder --            (desktop, default)
+//   odin run builder -- tools      (build odinbinder + androidgen, verify sokol-shdc)
+//   odin run builder -- shaders    (sokol-shdc -> vendors/shaders)
+//   odin run builder -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
+//   odin run builder -- desktop
+//   odin run builder -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
+//   odin run builder -- ios        (macOS only: xcodegen + xcodebuild simulator build)
 // Env: SAMPLE_ID, SMOKE_FRAMES, ANDROID_NDK, ANDROID_BUILD_ONLY.
 
 import "core:c"
@@ -23,12 +23,12 @@ ANDROIDGEN :: "build/tools/androidgen"
 ODINBINDER :: "build/tools/odinbinder"
 ANDROID_SPEC :: "binding/android/android.yaml"
 BINDING_SPEC :: "binding"
-BRIDGE_HEADER :: "binding/generated/bridge.h"
-BRIDGE_ODIN :: "binding/generated/bridge/bridge.odin"
-ANDROID_KOTLIN :: "binding/android/generated/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"
-ANDROID_JNI :: "binding/android/generated/bridge_jni.c"
-IOS_SWIFT :: "binding/ios/generated/GameBridge.swift"
-ODIN_COLLECTIONS :: "-collection:libs=vendors -collection:gen=binding/generated"
+BRIDGE_HEADER :: "generated/shared/bridge.h"
+BRIDGE_ODIN :: "generated/shared/bridge/bridge.odin"
+ANDROID_KOTLIN :: "generated/android/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"
+ANDROID_JNI :: "generated/android/bridge_jni.c"
+IOS_SWIFT :: "generated/ios/GameBridge.swift"
+ODIN_COLLECTIONS :: "-collection:libs=vendors -collection:gen=generated/shared"
 
 main :: proc() {
 	target := "desktop"
@@ -56,7 +56,7 @@ main :: proc() {
 		ensure_tools()
 	case:
 		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bindings|tools]")
+		fmt.eprintln("usage: odin run builder -- [desktop|android|ios|shaders|bindings|tools]")
 		os.exit(1)
 	}
 }

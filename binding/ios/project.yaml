@@ -12,7 +12,7 @@ targets:
     platform: iOS
     sources:
       - entry.m
-      - generated/GameBridge.swift
+      - ../../generated/ios/GameBridge.swift
       - BridgePlatform.swift
     settings:
       base:
@@ -44,7 +44,7 @@ targets:
           case $PLATFORM_NAME in iphoneos) plat=iphone;; iphonesimulator) plat=iphonesimulator;; *) echo "unsupported platform" >&2; exit 1;; esac
           objs=()
           for arch in $ARCHS; do
-            "$odin_bin" build "$root/app" -collection:libs="$root/vendors" -collection:gen="$root/binding/generated" \
+            "$odin_bin" build "$root/app" -collection:libs="$root/vendors" -collection:gen="$root/generated/shared" \
               -define:SMOKE_FRAMES="${SMOKE_FRAMES:-0}" -define:SAMPLE_ID="${SAMPLE_ID:-0}" \
               -o:speed -target:darwin_arm64 -subtarget:$plat -minimum-os-version:17.4 \
               -build-mode:obj -no-entry-point -out:"$out/odin-$plat-$arch.o"
