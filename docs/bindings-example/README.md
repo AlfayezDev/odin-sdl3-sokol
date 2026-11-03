@@ -49,7 +49,7 @@ installs the handler that shows a `UIAlertController`.
 
 | Artifact | Path | Consumed by |
 |---|---|---|
-| C ABI header | `binding/generated/bridge.h` | Swift bridging header, JNI glue |
+| C ABI header | `binding/generated/bridge.h` | JNI glue and ABI contract |
 | Odin foreign block | `binding/generated/bridge/bridge.odin` | the app (`gen:bridge`) |
 | Kotlin bridge object | `binding/android/generated/kotlin/dev/alfayez/odinsokol/OdinBridge.kt` | the Activity |
 | JNI glue | `binding/android/generated/bridge_jni.c` | `libmain.so` link |
@@ -61,7 +61,6 @@ Hand-written files stay outside the generated folders:
 |---|---|
 | `binding/android/java/.../OdinsokolActivity.java` | installs the Android `PlatformHandler` |
 | `binding/ios/BridgePlatform.swift` | installs the iOS `PlatformHandler` |
-| `binding/ios/Bridging.h` | imports the generated C header |
 | `binding/ios/entry.m` | SDL app callbacks |
 | `binding/ios/project.yaml` | XcodeGen spec |
 

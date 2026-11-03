@@ -98,8 +98,7 @@ binding/ios/generated/              iOS only
 
 Hand-written files stay outside these folders: `binding/binding.odin`,
 `binding/android/android.yaml`, the Android activity, and `binding/ios/`
-sources such as `entry.m`, `Bridging.h`, `BridgePlatform.swift`, and
-`project.yaml`.
+sources such as `entry.m`, `BridgePlatform.swift`, and `project.yaml`.
 
 Current type support is intentionally small:
 
