@@ -53,7 +53,8 @@ build/tools/odinbinder check --spec binding/spec
 
 `--target android|ios|all`. With `--target all`, the header and Odin
 declarations are the union of both target views, while each platform's
-Kotlin/Swift output comes from its own merged view.
+Kotlin/Swift output comes from its own merged view. In this repo the outputs
+are ignored and recreated by `odin run . -- bindings`.
 
 ## Types
 

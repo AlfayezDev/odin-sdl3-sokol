@@ -21,6 +21,8 @@ over the shared file by name. Today both only override `show_toast` with the
 right `thread` metadata.
 
 Everything below is derived from those files by `odin run . -- bindings`.
+The generated folders are ignored by git; a clean checkout contains only the
+hand-written contract and platform hosts.
 
 ## Direction 1 — Kotlin calls Odin (`hello`)
 

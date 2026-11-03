@@ -76,6 +76,9 @@ The Android/iOS build commands also run this automatically.
 
 ## What OdinBinder emits
 
+These folders are ignored by git. Create them with `odin run . -- bindings`;
+the desktop, Android, and iOS builds also run it automatically.
+
 | Output | Consumed by |
 |---|---|
 | `binding/generated/bridge.h` | shared C ABI contract |

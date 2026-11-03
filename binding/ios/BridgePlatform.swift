@@ -8,12 +8,15 @@ public func odinbinder_ios_install() {
 private final class OdinPlatform: OdinBridge.PlatformHandler {
 	func showToast(_ message: String) {
 		DispatchQueue.main.async {
+			guard let root = UIApplication.shared.connectedScenes
+				.compactMap({ $0 as? UIWindowScene })
+				.flatMap({ $0.windows })
+				.first(where: { $0.isKeyWindow })?
+				.rootViewController else { return }
+
 			let alert = UIAlertController(title: "Odin", message: message, preferredStyle: .alert)
 			alert.addAction(UIAlertAction(title: "OK", style: .default))
-			(UIApplication.shared.keyWindow?.rootViewController ?? UIApplication.shared.connectedScenes
-				.compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
-				.first)?
-				.present(alert, animated: true)
+			(root.presentedViewController ?? root).present(alert, animated: true)
 			DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
 				alert.dismiss(animated: true)
 			}

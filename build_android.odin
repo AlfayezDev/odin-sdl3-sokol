@@ -8,6 +8,7 @@ import "core:strings"
 
 build_android :: proc(sample_id, smoke: i32) {
 	ensure_sdl_sources()
+	gen_bindings()
 
 	ndk := os.get_env_alloc("ANDROID_NDK", context.allocator)
 	if ndk == "" {
@@ -92,8 +93,6 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("odin android object build failed")
 	}
 
-	// odinbinder: C header + Odin imports + Kotlin object + JNI glue
-	gen_bindings()
 	sh("mkdir -p build/gen")
 	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/generated %s -o build/gen/bridge_jni.o", android_cc, ANDROID_JNI)) {
 		fail("bridge_jni.c compile failed")

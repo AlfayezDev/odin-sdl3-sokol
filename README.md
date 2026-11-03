@@ -48,10 +48,10 @@ Generated and vendored:
 - `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
-- `binding/generated/bridge/bridge.odin` — generated import declarations (`gen:bridge`)
 - `shaders/samples/*.glsl` — shader sources; regenerate with `odin run . -- shaders`
+- `binding/README.md` — how to write a binding on each platform
 - `binding/spec/` — Odin binding contracts (`binding.odin`, `.android.odin`, `.ios.odin`)
-- `binding/generated/`, `binding/android/generated/`, `binding/ios/generated/` — generated bridge files
+- `binding/generated/`, `binding/android/generated/`, `binding/ios/generated/` — generated on demand and ignored by git
 - `tools/odinbinder/` — Odin-native bridge generator
 - `tools/androidgen/` — vendored Android Gradle project generator
 - `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script

@@ -3,3 +3,5 @@
 /odin-sokol
 *.log
 /deps/
+/binding/generated/
+/binding/*/generated/
