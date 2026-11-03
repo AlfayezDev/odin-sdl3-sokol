@@ -1,6 +1,6 @@
 package app
 
-// BINDINGS: the API contract lives in binding/binding.odin (see BINDINGS.md).
+// The API contract lives in binding/binding.odin (see binding/README.md).
 // Implement exports from that contract here as `proc "c"` functions.
 // Imports are generated into gen:bridge (import it as `b` and call them).
 
@@ -11,11 +11,6 @@ import b "gen:bridge"
 @(export)
 hello :: proc "c" () -> cstring {
 	return cstring("Hello from Odin")
-}
-
-@(export)
-add :: proc "c" (a, b: i32) -> i32 {
-	return a + b
 }
 
 // ---- glue ----

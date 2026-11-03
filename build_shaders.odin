@@ -82,7 +82,7 @@ ident_words :: proc(text: string) -> [dynamic]string {
 }
 
 shdc_odin :: proc(shdc, src, slang: string) -> string {
-	raw := fmt.tprintf("build/shaders_tmp/%s.%s.raw", strings.trim_suffix(strings.trim_prefix(src, "shaders/samples/"), ".glsl"), slang)
+	raw := fmt.tprintf("build/shaders_tmp/%s.%s.raw", strings.trim_suffix(strings.trim_prefix(src, "shaders/"), ".glsl"), slang)
 	if !sh(fmt.tprintf("%s -i %s -o %s -l %s --format sokol_odin", shdc, src, raw, slang)) {
 		fail(fmt.tprintf("sokol-shdc failed for %s (%s)", src, slang))
 	}
@@ -92,9 +92,9 @@ shdc_odin :: proc(shdc, src, slang: string) -> string {
 run_shaders :: proc() {
 	ensure_tools()
 	shdc := shdc_path()
-	entries, derr := os.read_directory_by_path("shaders/samples", -1, context.allocator)
+	entries, derr := os.read_directory_by_path("shaders", -1, context.allocator)
 	if derr != nil {
-		fail("cannot list shaders/samples")
+		fail("cannot list shaders")
 	}
 	sh("mkdir -p build/shaders_tmp vendors/shaders")
 	for e in entries {
@@ -102,7 +102,7 @@ run_shaders :: proc() {
 			continue
 		}
 		name := strings.trim_suffix(e.name, ".glsl")
-		src := fmt.tprintf("shaders/samples/%s", e.name)
+		src := fmt.tprintf("shaders/%s", e.name)
 		gl4 := shdc_odin(shdc, src, "glsl410")
 		gles := shdc_odin(shdc, src, "glsl300es")
 		gl4 = prefix_idents(gl4, fmt.tprintf("%s_gl4", name))

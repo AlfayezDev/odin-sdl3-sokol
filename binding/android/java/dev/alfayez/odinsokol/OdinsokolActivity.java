@@ -27,7 +27,6 @@ public class OdinsokolActivity extends SDLActivity {
         });
 
         Log.i(TAG, "hello: " + OdinBridge.hello());
-        Log.i(TAG, "add(2, 3) = " + OdinBridge.add(2, 3));
     }
 
     @Override

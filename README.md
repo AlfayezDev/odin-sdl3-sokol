@@ -1,61 +1,57 @@
-# Odin + SDL3 + sokol_gfx
+# Odin + SDL3 + sokol_gfx + native bindings
 
-One Odin app, 12 sokol_gfx demos, SDL3 as the platform layer.
-All build/run logic lives in `build.odin` + `build_*.odin` — run it with odin itself.
+The smallest cross-platform version of this project: one triangle, one Odin
+export, one platform import, Android and iOS.
 
-## Build & run
+## Build
 
 ```sh
 odin run . -- tools      # build odinbinder + androidgen, verify sokol-shdc
-odin run . -- shaders    # sokol-shdc -> vendors/shaders
-odin run . -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
-
-odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
-odin run . -- android    # bindings + NDK build + gradle APK + adb install/launch
-odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
+odin run . -- shaders    # regenerate vendors/shaders/triangle.odin
+odin run . -- bindings   # generate bridge code
+odin run . -- android    # NDK build, Gradle APK, install/launch
+odin run . -- ios        # xcodegen + xcodebuild (macOS only)
 ```
 
-`desktop` is the default. Env: `SAMPLE_ID` (0–11), `SMOKE_FRAMES` (exit after N frames),
-`ANDROID_BUILD_ONLY=1` (package the APK without installing).
+`ANDROID_BUILD_ONLY=1` packages the APK without installing it.
 
-## Samples (SAMPLE_ID)
-
-0 triangle · 1 quad · 2 mandelbrot · 3 cube · 4 instancing · 5 offscreen ·
-6 dyntex · 7 mrt · 8 blend · 9 shapes · 10 sgl · 11 debugtext
+Generated bridge files live under ignored `generated/` folders. Every platform
+build regenerates them.
 
 ## Layout
 
-Build entry points:
+App:
 
-- `build.odin` — CLI dispatch and shared helpers
-- `build_tools.odin` — odinbinder + androidgen bootstrap
-- `build_sdl.odin` — SDL config and sokol object compilation
-- `build_shaders.odin` — sokol-shdc generation
-- `build_desktop.odin` / `build_android.odin` / `build_ios.odin` — platform builds
-- `sdl3_build.sh` — Linux/Android SDL3 source build helper
+- `app/main.odin` — SDL lifecycle and the triangle draw
+- `app/bridge.odin` — `hello` export implementation and `bridge_init`
 
-App code:
+Bindings:
 
-- `app/main.odin` — SDL lifecycle, frame loop, smoke check
-- `app/samples.odin` — sample registry and shared helpers
-- `app/sample_*.odin` — one file per demo
-- `app/math4.odin` — 4x4 matrix helpers
-- `app/bridge.odin` — exported Odin bridge implementations
+- `binding/binding.odin` — the contract: one export, one import
+- `binding/README.md` — the hand-written binding flow on each platform
+- `binding/android/` — Gradle spec, manifest, resources, host activity
+- `binding/ios/` — SDL entry, platform handler, plist, XcodeGen spec
 
-Generated and vendored:
+Build and graphics:
 
-- `deps/SDL3-3.2.28/` — SDL3 source, downloaded on first desktop/android build (not checked in)
-- `vendors/sokol/` — vendored sokol C headers
-- `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
-- `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
-- `shaders/samples/*.glsl` — shader sources; regenerate with `odin run . -- shaders`
-- `binding/README.md` — how to write a binding on each platform
-- `binding/binding.odin` — the shared binding contract
-- `binding/generated/`, `binding/android/generated/`, `binding/ios/generated/` — generated on demand and ignored by git
-- `tools/odinbinder/` — Odin-native bridge generator
-- `tools/androidgen/` — vendored Android Gradle project generator
-- `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
+- `build*.odin` — Android, iOS, shader, and tool orchestration
+- `sdl3_build.sh` — SDL3 source build for Android
+- `shaders/triangle.glsl` — the only shader
+- `vendors/sokol/` — sokol_gfx + sokol_log headers
+- `vendors/sg/sg.odin` — Odin sokol_gfx bindings
+- `vendors/shaders/triangle.odin` — generated shader bindings
+- `tools/odinbinder/` — binding generator
+- `tools/androidgen/` — Gradle project generator
+- `tools/sokol-shdc/` — shader compiler
 
-The vendored sokol headers compile straight from the headers with impl defines,
-per platform, using whatever clang the host provides (desktop), the NDK
-(android), or Xcode (ios). The only other C is the generated JNI glue.
+## Binding flow
+
+```text
+binding/binding.odin  ->  odinbinder  ->  generated bridge code
+app/bridge.odin       ->  Odin export implementation
+Android activity      ->  installs the generated PlatformHandler
+iOS BridgePlatform    ->  installs the generated PlatformHandler
+```
+
+The contract, the Odin implementation, and the two platform hosts are the only
+binding files written by hand. See `binding/README.md` for the exact steps.

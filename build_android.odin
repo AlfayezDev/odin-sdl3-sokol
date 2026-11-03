@@ -6,7 +6,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-build_android :: proc(sample_id, smoke: i32) {
+build_android :: proc() {
 	ensure_sdl_sources()
 	gen_bindings()
 
@@ -87,8 +87,8 @@ printf '%s' "$NDK" > build/android_ndk_path
 
 	// odin object
 	if !sh(fmt.tprintf(
-		"ODIN_ANDROID_NDK=%q ANDROID_NDK=%q odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -target:linux_arm64 -subtarget:android -minimum-os-version:29 -build-mode:obj -no-entry-point -out:%s/odin-app.o",
-		ndk, ndk, ODIN_COLLECTIONS, smoke, sample_id, out_dir,
+		"ODIN_ANDROID_NDK=%q ANDROID_NDK=%q odin build app %s -o:speed -target:linux_arm64 -subtarget:android -minimum-os-version:29 -build-mode:obj -no-entry-point -out:%s/odin-app.o",
+		ndk, ndk, ODIN_COLLECTIONS, out_dir,
 	)) {
 		fail("odin android object build failed")
 	}

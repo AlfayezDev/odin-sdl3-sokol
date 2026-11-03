@@ -24,7 +24,7 @@ targets:
         ENABLE_DEBUG_DYLIB: NO
         HEADER_SEARCH_PATHS: "$(SRCROOT)/../../deps/SDL3-3.2.28/include"
         SWIFT_VERSION: "5.9"
-        OTHER_LDFLAGS: '$(inherited) -lc++ "$(DERIVED_FILE_DIR)/odin-app.o" "$(DERIVED_FILE_DIR)/sokol_gfx.o" "$(DERIVED_FILE_DIR)/sokol_gl.o" "$(DERIVED_FILE_DIR)/sokol_debugtext.o" "$(DERIVED_FILE_DIR)/sokol_shape.o"'
+        OTHER_LDFLAGS: '$(inherited) -lc++ "$(DERIVED_FILE_DIR)/odin-app.o" "$(DERIVED_FILE_DIR)/sokol_gfx.o"'
     dependencies:
       - target: SDL/SDL3
         embed: true
@@ -45,7 +45,6 @@ targets:
           objs=()
           for arch in $ARCHS; do
             "$odin_bin" build "$root/app" -collection:libs="$root/vendors" -collection:gen="$root/binding/generated" \
-              -define:SMOKE_FRAMES="${SMOKE_FRAMES:-0}" -define:SAMPLE_ID="${SAMPLE_ID:-0}" \
               -o:speed -target:darwin_arm64 -subtarget:$plat -minimum-os-version:17.4 \
               -build-mode:obj -no-entry-point -out:"$out/odin-$plat-$arch.o"
             objs+=("$out/odin-$plat-$arch.o")
@@ -55,27 +54,20 @@ targets:
           else
             cp "${objs[0]}" "$out/odin-app.o"
           fi
-          for unit in gfx gl debugtext shape; do
-            case $unit in
-              gfx)       header=sokol_gfx.h;       cflags="-DSOKOL_IMPL -include sokol_log.h";;
-              gl)        header=sokol_gl.h;        cflags="-DSOKOL_GL_IMPL -include sokol_gfx.h";;
-              debugtext) header=sokol_debugtext.h; cflags="-DSOKOL_DEBUGTEXT_IMPL -include sokol_gfx.h";;
-              shape)     header=sokol_shape.h;     cflags="-DSOKOL_SHAPE_IMPL -include sokol_gfx.h";;
-            esac
-            for arch in $ARCHS; do
-              xcrun -sdk "$SDKROOT" clang -x c -c -arch "$arch" -O2 -DSOKOL_NO_ENTRY -DSOKOL_GLES3 $cflags \
-                -I"$root/vendors/sokol" "$root/vendors/sokol/$header" -o "$out/sokol_$unit-$arch.o"
-            done
-            if [ ${#ARCHS[@]} -gt 1 ]; then
-              xcrun lipo -create "$out"/sokol_$unit-*.o -output "$out/sokol_$unit.o"
-            else
-              cp "$out/sokol_$unit-${ARCHS[0]}.o" "$out/sokol_$unit.o"
-            fi
+          for arch in $ARCHS; do
+            xcrun -sdk "$SDKROOT" clang -x c -c -arch "$arch" -O2 -DSOKOL_NO_ENTRY -DSOKOL_GLES3 -DSOKOL_IMPL \
+              -include sokol_log.h -I"$root/vendors/sokol" "$root/vendors/sokol/sokol_gfx.h" -o "$out/sokol_gfx-$arch.o"
           done
+          if [ ${#ARCHS[@]} -gt 1 ]; then
+            xcrun lipo -create "$out"/sokol_gfx-*.o -output "$out/sokol_gfx.o"
+          else
+            cp "$out/sokol_gfx-${ARCHS[0]}.o" "$out/sokol_gfx.o"
+          fi
         basedOnDependencyAnalysis: false
         showEnvVars: false
         outputFiles:
           - $(DERIVED_FILE_DIR)/odin-app.o
+          - $(DERIVED_FILE_DIR)/sokol_gfx.o
 schemes:
   odin-sokol:
     build:

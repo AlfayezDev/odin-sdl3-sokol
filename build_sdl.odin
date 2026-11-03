@@ -64,22 +64,12 @@ ensure_sdl_sources :: proc() {
 }
 
 sokol_objects :: proc(out_dir: string, backend, cc: string) {
-	units := [4]string{"gfx", "gl", "debugtext", "shape"}
 	sh(fmt.tprintf("mkdir -p %s/obj", out_dir))
-	for unit in units {
-		header := fmt.tprintf("sokol_%s.h", unit)
-		flags := ""
-		if unit == "gfx" {
-			flags = "-DSOKOL_IMPL -include sokol_log.h"
-		} else {
-			flags = fmt.tprintf("-DSOKOL_%s_IMPL -include sokol_gfx.h", strings.to_upper(unit))
-		}
-		cmd := fmt.tprintf(
-			"%s -x c -c -O2 -DSOKOL_NO_ENTRY -D%s %s -I%s -I vendors/sokol vendors/sokol/%s -o %s/obj/sokol_%s.o",
-			cc, backend, flags, out_dir, header, out_dir, unit,
-		)
-		if !sh(cmd) {
-			fail(fmt.tprintf("sokol %s header compile failed", unit))
-		}
+	cmd := fmt.tprintf(
+		"%s -x c -c -O2 -DSOKOL_NO_ENTRY -D%s -DSOKOL_IMPL -include sokol_log.h -I%s -I vendors/sokol vendors/sokol/sokol_gfx.h -o %s/obj/sokol_gfx.o",
+		cc, backend, out_dir, out_dir,
+	)
+	if !sh(cmd) {
+		fail("sokol_gfx header compile failed")
 	}
 }

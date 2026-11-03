@@ -1,14 +1,12 @@
 package odin_sokol_build
 
 // Unified build orchestrator. Usage:
-//   odin run . --            (desktop, default)
 //   odin run . -- tools      (build odinbinder + androidgen, verify sokol-shdc)
 //   odin run . -- shaders    (sokol-shdc -> vendors/shaders)
 //   odin run . -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
-//   odin run . -- desktop
-//   odin run . -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
+//   odin run . -- android    [ANDROID_BUILD_ONLY=1]
 //   odin run . -- ios        (macOS only: xcodegen + xcodebuild simulator build)
-// Env: SAMPLE_ID, SMOKE_FRAMES, ANDROID_NDK, ANDROID_BUILD_ONLY.
+// Env: ANDROID_NDK, ANDROID_BUILD_ONLY.
 
 import "core:c"
 import "core:fmt"
@@ -31,23 +29,19 @@ IOS_SWIFT :: "binding/ios/generated/GameBridge.swift"
 ODIN_COLLECTIONS :: "-collection:libs=vendors -collection:gen=binding/generated"
 
 main :: proc() {
-	target := "desktop"
+	target := ""
 	args := os.args
 	if len(args) > 1 {
 		target = args[1]
 	}
-	sample_id := env_int("SAMPLE_ID", 0)
-	smoke := env_int("SMOKE_FRAMES", 0)
 
 	sh("mkdir -p build")
 
 	switch target {
-	case "desktop":
-		build_desktop(sample_id, smoke)
 	case "android":
-		build_android(sample_id, smoke)
+		build_android()
 	case "ios":
-		build_ios(sample_id, smoke)
+		build_ios()
 	case "shaders":
 		run_shaders()
 	case "bindings":
@@ -55,8 +49,8 @@ main :: proc() {
 	case "tools":
 		ensure_tools()
 	case:
-		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bindings|tools]")
+		if target != "" do fmt.eprintln("unknown target:", target)
+		fmt.eprintln("usage: odin run . -- [android|ios|shaders|bindings|tools]")
 		os.exit(1)
 	}
 }
@@ -70,21 +64,6 @@ sh :: proc(cmd: string) -> bool {
 		fmt.eprintln("FAILED:", cmd)
 	}
 	return status == 0
-}
-
-env_int :: proc(name: string, fallback: i32) -> i32 {
-	v := os.get_env_alloc(name, context.allocator)
-	if v == "" {
-		return fallback
-	}
-	n: i32
-	for ch in v {
-		if ch < '0' || ch > '9' {
-			return fallback
-		}
-		n = n * 10 + i32(ch - '0')
-	}
-	return n
 }
 
 find :: proc(s, sub: string) -> i32 {
