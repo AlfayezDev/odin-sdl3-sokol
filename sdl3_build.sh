@@ -1,6 +1,6 @@
 #!/bin/sh
-# Compiles the vendored SDL3 sources into libSDL3.a or libSDL3.so.
-# All parameters come from the environment:
+# Compiles the vendored SDL3 sources into a static lib (desktop) or a
+# shared libSDL3.so (android). All parameters come from the environment:
 #   ROOT         repo root
 #   OUT_DIR      output dir (obj/, SDL_build_config.h, libSDL3.a|so)
 #   CC           compiler command (may include target/sysroot flags)
