@@ -1,7 +1,7 @@
 package app
 
 // BINDINGS: every `proc "c"` declaration in this file is part of the
-// cross-language API (bridgegen reads it — see BINDINGS.md):
+// cross-language API (androidgen bindings reads it — see BINDINGS.md):
 //
 //   with body    -> implemented here in Odin; consumed by Kotlin/Swift
 //   without body -> implemented by the platform; callable from Odin

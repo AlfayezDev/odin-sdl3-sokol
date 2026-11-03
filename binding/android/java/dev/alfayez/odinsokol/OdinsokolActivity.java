@@ -1,4 +1,3 @@
-
 package dev.alfayez.odinsokol;
 
 import android.os.Bundle;
@@ -15,20 +14,32 @@ public class OdinsokolActivity extends SDLActivity
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        OdinBridge.activity = this;
+
+        // odin -> platform: generated JNI glue calls these callbacks.
+        OdinBridge.setPlatform(new OdinBridge.PlatformHandler() {
+            @Override
+            public void showToast(String message) {
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        android.widget.Toast.makeText(
+                            OdinsokolActivity.this,
+                            message,
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show();
+                        android.util.Log.i("OdinNative", "Toast shown on UI thread: " + message);
+                    }
+                });
+            }
+        });
+
         // kotlin -> odin: hello world export call
         android.util.Log.i("OdinBridge", "odin_hello: " + OdinBridge.hello());
         android.util.Log.i("OdinBridge", "odin_add(2, 3) = " + OdinBridge.add(2, 3));
     }
 
-    // Standard UTF-8 bytes avoid JNI modified-UTF-8 limitations (including emoji).
-    public void showOdinToast(byte[] utf8) {
-        final String message = new String(utf8, java.nio.charset.StandardCharsets.UTF_8);
-        runOnUiThread(() -> {
-            if (!isFinishing() && !isDestroyed()) {
-                android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
-                android.util.Log.i("OdinNative", "Toast shown on UI thread: " + message);
-            }
-        });
+    @Override
+    protected void onDestroy() {
+        OdinBridge.setPlatform(null);
+        super.onDestroy();
     }
 }

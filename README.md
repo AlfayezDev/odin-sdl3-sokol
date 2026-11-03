@@ -6,12 +6,17 @@ All build/run logic lives in `build.odin` — run it with odin itself.
 ## Build & run
 
 ```sh
+odin run . -- tools      # build androidgen, verify sokol-shdc
+odin run . -- shaders    # sokol-shdc -> vendors/shaders
+odin run . -- bindings   # androidgen -> C header, Odin, Kotlin, JNI glue
+
 odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
-odin run . -- android    # NDK build, gradle APK, adb install + launch
+odin run . -- android    # bindings + NDK build + gradle APK + adb install/launch
 odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 ```
 
-`desktop` is the default. Env: `SAMPLE_ID` (0–11), `SMOKE_FRAMES` (exit after N frames).
+`desktop` is the default. Env: `SAMPLE_ID` (0–11), `SMOKE_FRAMES` (exit after N frames),
+`ANDROID_BUILD_ONLY=1` (package the APK without installing).
 
 ## Samples (SAMPLE_ID)
 
@@ -26,6 +31,8 @@ odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
 - `shaders/samples/*.glsl` — shader sources; regenerate bindings with
   `odin run . -- shaders` after editing
+- `tools/androidgen/` — vendored Android project/bindings generator
+- `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
 
 The vendored sokol headers are the only C in the build: compiled straight
 from the headers with impl defines, per platform, by whatever clang the

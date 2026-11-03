@@ -14,7 +14,7 @@ hello :: proc "c" () -> cstring { ... }   // body → Odin implements it
 show_toast :: proc "c" (msg: cstring)     // no body → the platform implements it
 ```
 
-Everything below is derived from that file by `odin run . -- bridge`.
+Everything below is derived from that file by `odin run . -- bindings`.
 
 ## Direction 1 — Kotlin calls Odin (`hello`)
 
@@ -33,8 +33,8 @@ from the generated `binding/api/bridge.h`, imported through
 ```
 odin: b.show_toast("hi")               (app/bridge.odin via libs:bridge foreign block)
    └─ show_toast(const char*)          (build/gen/bridge_jni.c, generated up-call)
-        └─ OdinBridge.showToast("hi")  (OdinBridge.kt, generated dispatcher)
-             └─ onPlatformEvent → Toast on the UI thread
+        └─ OdinBridge.showToast("hi")  (OdinBridge.kt, generated wrapper)
+             └─ PlatformHandler.showToast → Toast on the UI thread
 ```
 
 iOS: `binding/ios/bridge.swift` implements the same C symbol with
@@ -53,7 +53,7 @@ Platform bodies (the only hand-written non-Odin code):
 
 | Import | Android | iOS | Desktop |
 |---|---|---|---|
-| `show_toast` | `onPlatformEvent` → Toast | `bridge.swift` UIAlertController | `binding/desktop/bridge.c` printf |
+| `show_toast` | `PlatformHandler.showToast` → Toast | `bridge.swift` UIAlertController | `binding/desktop/bridge.c` printf |
 
 ## Lifecycle wiring (Android)
 
@@ -62,8 +62,9 @@ Platform bodies (the only hand-written non-Odin code):
 - `static { System.loadLibrary("main"); }` — loads the lib (and runs
   `JNI_OnLoad`, which caches the JavaVM + class + method IDs) before any
   bridge call
-- `onCreate` sets `OdinBridge.activity = this` (the dispatcher needs a
-  UI-thread host) and logs `OdinBridge.hello()` / `OdinBridge.add(2, 3)`
+- `onCreate` installs an `OdinBridge.PlatformHandler` via
+  `OdinBridge.setPlatform(...)`, and `onDestroy` clears it.
+  It also logs `OdinBridge.hello()` / `OdinBridge.add(2, 3)`.
 
 On the Odin side, `bridge_init()` in `app/bridge.odin` fires
 `show_toast("hello from odin")` during app init — proving direction 2.

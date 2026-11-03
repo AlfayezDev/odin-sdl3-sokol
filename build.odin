@@ -2,8 +2,11 @@ package odin_sokol_build
 
 // Unified build orchestrator. Usage:
 //   odin run . --            (desktop, default)
+//   odin run . -- tools      (build androidgen, verify sokol-shdc)
+//   odin run . -- shaders    (sokol-shdc -> vendors/shaders)
+//   odin run . -- bindings   (androidgen -> C/Odin/Kotlin/JNI bridge)
 //   odin run . -- desktop
-//   odin run . -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0]
+//   odin run . -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
 //   odin run . -- ios        (macOS only: xcodegen + xcodebuild simulator build)
 // Env: SAMPLE_ID, SMOKE_FRAMES, ANDROID_NDK, ADB.
 
@@ -15,6 +18,9 @@ import "core:strings"
 foreign {
 	system :: proc "c" (command: cstring) -> c.int ---
 }
+
+ANDROIDGEN :: "build/tools/androidgen"
+ANDROID_SPEC :: "binding/android/android.yaml"
 
 main :: proc() {
 	target := "desktop"
@@ -37,24 +43,52 @@ main :: proc() {
 		build_ios(sample_id, smoke)
 	case "shaders":
 		run_shaders()
+	case "bindings":
+		gen_bindings()
 	case "bridge":
-		gen_bridge()
+		// backward-compatible alias
+		gen_bindings()
+	case "tools":
+		ensure_tools()
 	case:
 		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bridge]")
+		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bindings|bridge|tools]")
 		os.exit(1)
 	}
 }
 
-// regenerate all binding artifacts from binding/api/bridge.spec
-gen_bridge :: proc() {
-	if !sh("test -x build/tools/bridgegen") {
-		if !sh("odin build tools/bridgegen/src -o:speed -out:build/tools/bridgegen") {
-			fail("bridgegen build failed")
-		}
+// build/verify the two external tools used by this repo
+ensure_tools :: proc() {
+	sh("mkdir -p build/tools")
+	if !sh(fmt.tprintf("odin build tools/androidgen/src -o:speed -out:%s", ANDROIDGEN)) {
+		fail("androidgen build failed")
 	}
-	if !sh("build/tools/bridgegen --source app/bridge.odin --hdr binding/api/bridge.h --odin vendors/bridge/bridge.odin --kt binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --package dev.alfayez.odinsokol --class OdinBridge") {
-		fail("bridgegen failed")
+	shdc := shdc_path()
+	if !sh(fmt.tprintf("test -x %q", shdc)) {
+		fail(fmt.tprintf("sokol-shdc missing at %s (run tools/sokol-shdc/fetch.sh or add the platform binary)", shdc))
+	}
+}
+
+shdc_path :: proc() -> string {
+	when ODIN_OS == .Linux {
+		return "tools/sokol-shdc/bin/linux-x86_64/sokol-shdc"
+	} else when ODIN_OS == .Darwin {
+		when ODIN_ARCH == .arm64 {
+			return "tools/sokol-shdc/bin/macos-arm64/sokol-shdc"
+		} else {
+			return "tools/sokol-shdc/bin/macos-x86_64/sokol-shdc"
+		}
+	} else when ODIN_OS == .Windows {
+		return "tools/sokol-shdc/bin/windows-x86_64/sokol-shdc.exe"
+	}
+	return "tools/sokol-shdc/bin/sokol-shdc"
+}
+
+// regenerate bridge/C/Odin/Kotlin artifacts via the generic androidgen tool
+gen_bindings :: proc() {
+	ensure_tools()
+	if !sh(fmt.tprintf("%s bindings --spec %s", ANDROIDGEN, ANDROID_SPEC)) {
+		fail("androidgen bindings failed")
 	}
 	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, bridge_jni.c")
 }
@@ -296,7 +330,8 @@ shdc_odin :: proc(shdc, src, slang: string) -> string {
 }
 
 run_shaders :: proc() {
-	shdc := "vendors/tools/sokol-shdc"
+	ensure_tools()
+	shdc := shdc_path()
 	entries, derr := os.read_directory_by_path("shaders/samples", -1, context.allocator)
 	if derr != nil {
 		fail("cannot list shaders/samples")
@@ -326,7 +361,6 @@ run_shaders :: proc() {
 				}
 			}
 		}
-		fmt.println("DEBUG progs:", len(progs), progs)
 		db: strings.Builder
 		strings.builder_init(&db)
 		for prog in progs {
@@ -536,8 +570,8 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("odin android object build failed")
 	}
 
-	// bridgegen: kotlin bridge + jni glue from binding/api/bridge.spec
-	gen_bridge()
+	// androidgen: C header + Odin imports + Kotlin object + JNI glue
+	gen_bindings()
 	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/api build/gen/bridge_jni.c -o build/gen/bridge_jni.o", android_cc)) {
 		fail("bridge_jni.c compile failed")
 	}
@@ -554,13 +588,8 @@ printf '%s' "$NDK" > build/android_ndk_path
 	}
 	sh(fmt.tprintf("cp %s/libSDL3.so %s/libmain.so build/android/jni/arm64-v8a/", out_dir, out_dir))
 
-	// generate the gradle project from binding/android (androidgen)
-	if !sh("test -x build/tools/androidgen") {
-		if !sh("odin build tools/androidgen/src -o:speed -out:build/tools/androidgen") {
-			fail("androidgen build failed")
-		}
-	}
-	if !sh("build/tools/androidgen generate --spec binding/android/project.yaml --out android --templates tools/androidgen") {
+	// generate the gradle project from binding/android/android.yaml
+	if !sh(fmt.tprintf("%s generate --spec %s --project android --templates tools/androidgen", ANDROIDGEN, ANDROID_SPEC)) {
 		fail("androidgen generate failed")
 	}
 

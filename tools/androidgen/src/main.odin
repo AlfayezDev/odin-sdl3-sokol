@@ -1,253 +1,498 @@
 package androidgen
 
-// androidgen: generate a complete gradle Android project from a small
-// declarative spec — the "XcodeGen for Android". Hand-written glue
-// (manifest, res, java) stays where it lives; generated files and
-// symlinks land in the output project directory.
-
-import "core:c"
-
-foreign {
-	system :: proc "c" (command: cstring) -> c.int ---
-}
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 
-jp :: proc(args: ..string) -> string {
-	res, _ := filepath.join(args)
-	return res
-}
+VERSION :: "0.3.0"
 
-sh :: proc(cmd: string) -> bool {
-	cs := strings.clone_to_cstring(cmd, context.temp_allocator)
-	status := system(cs)
-	if status != 0 {
-		fmt.eprintln("FAILED:", cmd)
-	}
-	return status == 0
-}
-
-fail :: proc(msg: string) {
-	fmt.eprintln("androidgen:", msg)
-	os.exit(1)
+Cli_Options :: struct {
+	spec:           string,
+	project:        string,
+	project_root:   string,
+	platform:       string,
+	quiet:          bool,
+	no_env:         bool,
+	use_cache:      bool,
+	cache_path:     string,
+	only_manifests: bool,
+	templates:      string,
+	dry_run:        bool,
+	keep_going:     bool,
 }
 
 usage :: proc() {
-	fmt.println("usage: androidgen generate --spec <project.yaml> [--out <dir>] [--templates <asset_dir>]")
-	fmt.println("  spec paths are resolved relative to the spec file's directory")
-	fmt.println("  output project dir is fully regenerable; add it to .gitignore")
-	os.exit(1)
-}
-
-// spec: flat "key: value" lines, '#' comments. Repeatable keys: abi, java.
-parse_spec :: proc(path: string) -> map[string][dynamic]string {
-	data, err := os.read_entire_file_from_path(path, context.allocator)
-	if err != nil {
-		fail(fmt.tprintf("cannot read spec %s", path))
-	}
-	m := make(map[string][dynamic]string)
-	for line in strings.split(string(data), "\n") {
-		s := strings.trim_space(line)
-		if len(s) == 0 || s[0] == '#' {
-			continue
-		}
-		colon := -1
-		for i in 0..<len(s) {
-			if s[i] == ':' {
-				colon = i
-				break
-			}
-		}
-		if colon <= 0 {
-			fail(fmt.tprintf("bad spec line: %s", s))
-		}
-		key := strings.trim_space(s[:colon])
-		val := strings.trim_space(s[colon + 1:])
-		if hash := strings.index_byte(val, '#'); hash >= 0 {
-			val = strings.trim_space(val[:hash])
-		}
-		_, ok := m[key]
-		if !ok {
-			m[key] = make([dynamic]string)
-		// dynamic array: appended below via &
-		}
-		append(&m[key], val)
-	}
-	return m
-}
-
-spec_first :: proc(m: map[string][dynamic]string, key: string) -> string {
-	if vals, ok := m[key]; ok && len(vals) > 0 {
-		return vals[0]
-	}
-	return ""
-}
-
-// resolve a spec path against the spec file's directory
-spec_path :: proc(m: map[string][dynamic]string, key: string, spec_dir: string) -> string {
-	val := spec_first(m, key)
-	if val == "" {
-		return ""
-	}
-	return jp(spec_dir, val)
-}
-
-required_keys := [8]string{"app_id", "namespace", "root_project_name", "compile_sdk", "min_sdk", "target_sdk", "agp_version", "gradle_version"}
-
-render :: proc(tmpl: string, m: map[string][dynamic]string) -> string {
-	out := tmpl
-	for key, vals in m {
-		if len(vals) == 0 {
-			continue
-		}
-		needle := fmt.tprintf("%s%s%s", "{{", key, "}}")
-		if strings.contains(out, needle) {
-			out, _ = strings.replace(out, needle, vals[0], -1)
-		}
-	}
-	return out
-}
-
-run_generate :: proc(args: []string) {
-	spec_file := ""
-	out_dir := "android"
-	tool_dir := ""
-	i := 0
-	for i < len(args) {
-		a := args[i]
-		if a == "--spec" && i + 1 < len(args) {
-			i += 1
-			spec_file = args[i]
-		} else if a == "--out" && i + 1 < len(args) {
-			i += 1
-			out_dir = args[i]
-		} else if a == "--templates" && i + 1 < len(args) {
-			i += 1
-			tool_dir = args[i]
-		} else {
-			fail(fmt.tprintf("unknown argument: %s", a))
-		}
-		i += 1
-	}
-	if spec_file == "" {
-		usage()
-	}
-	spec_file = filepath.abs(spec_file) or_else spec_file
-	spec_dir := filepath.dir(spec_file)
-
-	// asset dir: contains templates/ and wrapper/ (default: next to the binary)
-	if tool_dir == "" {
-		bin := filepath.abs(os.args[0]) or_else os.args[0]
-		tool_dir = filepath.dir(bin)
-	}
-
-	m := parse_spec(spec_file)
-	for key in required_keys {
-		if spec_first(m, key) == "" {
-			fail(fmt.tprintf("spec missing required key: %s", key))
-		}
-	}
-	abis := m["abi"]
-	if len(abis) == 0 {
-		fail("spec missing key: abi")
-	}
-	java_dirs := m["java"]
-	if len(java_dirs) == 0 {
-		fail("spec missing key: java (at least one java source dir)")
-	}
-
-	// computed template values
-	abi_parts := make([dynamic]string)
-	for a in abis {
-		append(&abi_parts, fmt.tprintf("'%s'", a))
-	}
-	m["abi_filters"] = make([dynamic]string)
-	append(&m["abi_filters"], fmt.tprintf("abiFilters %s", strings.join(abi_parts[:], ", ")))
-
-	java_dir_names := make([dynamic]string)
-	for jd, idx in java_dirs {
-		append(&java_dir_names, fmt.tprintf("'src/main/java-src-%d'", idx + 1))
-	}
-	m["java_srcdirs"] = make([dynamic]string)
-	java_srcdirs_str, _ := strings.concatenate([]string{"    sourceSets {\n        main {\n            java { srcDirs = [", strings.join(java_dir_names[:], ", "), "] }\n        }\n    }\n"})
-	append(&m["java_srcdirs"], java_srcdirs_str)
-
-	// layout
-	sh(fmt.tprintf("mkdir -p '%s' '%s/app/src/main' '%s/gradle/wrapper'", out_dir, out_dir, out_dir))
-
-	// gradle files from templates
-	pairs := [4][2]string{
-		{"settings.gradle.tmpl", "settings.gradle"},
-		{"build.gradle.tmpl", "build.gradle"},
-		{"gradle.properties.tmpl", "gradle.properties"},
-		{"app.build.gradle.tmpl", "app/build.gradle"},
-	}
-	for pair in pairs {
-		tmpl_path := jp(tool_dir, "templates", pair[0])
-		data, err := os.read_entire_file_from_path(tmpl_path, context.allocator)
-		if err != nil {
-			fail(fmt.tprintf("missing template: %s", tmpl_path))
-		}
-		txt := render(string(data), m)
-		_ = os.write_entire_file_from_string(jp(out_dir, pair[1]), txt)
-	}
-
-	// gradle wrapper: copy scripts + jar, render properties with the spec's version
-	sh(fmt.tprintf("cp '%s/wrapper/gradlew' '%s/gradlew' && cp '%s/wrapper/gradlew.bat' '%s/gradlew.bat'", tool_dir, out_dir, tool_dir, out_dir))
-	sh(fmt.tprintf("cp '%s/wrapper/gradle/wrapper/gradle-wrapper.jar' '%s/gradle/wrapper/gradle-wrapper.jar'", tool_dir, out_dir))
-	sh(fmt.tprintf("chmod +x '%s/gradlew'", out_dir))
-	wrapper_data, werr := os.read_entire_file_from_path(jp(tool_dir, "templates/gradle-wrapper.properties.tmpl"), context.allocator)
-	if werr != nil {
-		fail("missing template: gradle-wrapper.properties.tmpl")
-	}
-	sha := spec_first(m, "gradle_sha256")
-	sha_line := ""
-	if sha != "" {
-		sha_line = fmt.tprintf("distributionSha256Sum=%s", sha)
-	}
-	wtxt := render(string(wrapper_data), m)
-	wtxt, _ = strings.replace(wtxt, "{{gradle_sha256_line}}", sha_line, -1)
-	_ = os.write_entire_file_from_string(jp(out_dir, "gradle/wrapper", "gradle-wrapper.properties"), wtxt)
-
-	// symlink the hand-written glue + external sources into the project
-	link :: proc(out_dir, link_rel, target: string) {
-		if !sh(fmt.tprintf("test -e '%s'", target)) {
-			fail(fmt.tprintf("spec path does not exist: %s", target))
-		}
-		sh(fmt.tprintf("ln -sfn '%s' '%s'", target, jp(out_dir, link_rel)))
-	}
-	link(out_dir, "app/src/main/AndroidManifest.xml", spec_path(m, "manifest", spec_dir))
-	if res := spec_path(m, "res", spec_dir); res != "" {
-		link(out_dir, "app/src/main/res", res)
-	}
-	for jd, idx in java_dirs {
-		link(out_dir, fmt.tprintf("app/src/main/java-src-%d", idx + 1), jp(spec_dir, jd))
-	}
-	if jni := spec_path(m, "jni_libs", spec_dir); jni != "" {
-		link(out_dir, "app/src/main/jniLibs", jni)
-	}
-	if pg := spec_path(m, "proguard", spec_dir); pg != "" {
-		link(out_dir, "app/proguard-rules.pro", pg)
-	}
-
-	fmt.println("androidgen: generated", out_dir)
-	fmt.println("  gradle files: settings.gradle, build.gradle, app/build.gradle, gradle.properties")
-	fmt.println("  wrapper: gradle", spec_first(m, "gradle_version"), "+ agp", spec_first(m, "agp_version"))
-	fmt.println("  linked: manifest, res,", len(java_dirs), "java dir(s), jniLibs")
-	fmt.println("build with: cd", out_dir, "&& ./gradlew assembleDebug")
+	fmt.println("androidgen", VERSION, "- generate Android Gradle projects from a project spec")
+	fmt.println()
+	fmt.println("usage:")
+	fmt.println("  androidgen generate [options]")
+	fmt.println("  androidgen cache [options]")
+	fmt.println("  androidgen dump [options]")
+	fmt.println("  androidgen bindings [options]")
+	fmt.println("  androidgen check [project.yaml]")
+	fmt.println("  androidgen platforms [project.yaml]")
+	fmt.println()
+	fmt.println("options:")
+	fmt.println("  -s, --spec <path>          project spec (default: project.yml)")
+	fmt.println("  -p, --project <dir>        output project directory")
+	fmt.println("      --project-root <dir>   root for resolving spec paths")
+	fmt.println("      --platform <name|all>  generate a platform from project.yaml")
+	fmt.println("  -q, --quiet                suppress informational output")
+	fmt.println("  -n, --no-env               disable ${ENV} expansion")
+	fmt.println("  -c, --use-cache            skip generation when the spec is unchanged")
+	fmt.println("      --cache-path <path>    custom cache file")
+	fmt.println("      --only-manifests       write generated manifests only")
+	fmt.println("      --templates <dir>      custom template/wrapper asset directory")
+	fmt.println("      --dry-run              print orchestrator commands only")
+	fmt.println("      --keep-going           continue after a platform fails")
+	fmt.println("      --version              print version")
+	fmt.println("  -h, --help                 show this help")
 }
 
 main :: proc() {
 	args := os.args
 	if len(args) < 2 {
-		usage()
+		run_generate_command(Cli_Options{})
+		return
 	}
 	switch args[1] {
-	case "generate":
-		run_generate(args[2:])
-	case:
+	case "generate", "gen":
+		opts := parse_cli(args[2:])
+		run_generate_command(opts)
+	case "cache":
+		opts := parse_cli(args[2:])
+		run_cache_command(opts)
+	case "dump":
+		run_dump_command(args[2:])
+	case "bindings":
+		opts := parse_cli(args[2:])
+		run_bindings_command(opts)
+	case "check":
+		run_check_command(args[2:])
+	case "platforms":
+		run_platforms_command(args[2:])
+	case "--version", "version":
+		fmt.println(VERSION)
+	case "--help", "-h", "help":
 		usage()
+	case:
+		// XcodeGen routes unknown invocations to generate. Mirror that.
+		if strings.has_prefix(args[1], "-") {
+			opts := parse_cli(args[1:])
+			run_generate_command(opts)
+		} else {
+			fmt.eprintln("androidgen: unknown command:", args[1])
+			usage()
+			os.exit(1)
+		}
 	}
+}
+
+parse_cli :: proc(args: []string) -> Cli_Options {
+	opts := Cli_Options{}
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		next_value :: proc(args: []string, i: ^int, flag: string) -> string {
+			if i^ + 1 >= len(args) {
+				fmt.eprintln("androidgen: missing value for", flag)
+				os.exit(1)
+			}
+			i^ += 1
+			return args[i^]
+		}
+		switch a {
+		case "-s", "--spec":
+			opts.spec = next_value(args, &i, a)
+		case "-p", "--project", "--out":
+			opts.project = next_value(args, &i, a)
+		case "-r", "--project-root":
+			opts.project_root = next_value(args, &i, a)
+		case "--platform":
+			opts.platform = next_value(args, &i, a)
+		case "-q", "--quiet":
+			opts.quiet = true
+		case "-n", "--no-env":
+			opts.no_env = true
+		case "-c", "--use-cache":
+			opts.use_cache = true
+		case "--cache-path":
+			opts.cache_path = next_value(args, &i, a)
+		case "--only-manifests", "--only-plists":
+			opts.only_manifests = true
+		case "--templates":
+			opts.templates = next_value(args, &i, a)
+		case "--dry-run":
+			opts.dry_run = true
+		case "--keep-going":
+			opts.keep_going = true
+		case "--version":
+			fmt.println(VERSION)
+			os.exit(0)
+		case "-h", "--help":
+			usage()
+			os.exit(0)
+		case:
+			fmt.eprintln("androidgen: unknown argument:", a)
+			os.exit(1)
+		}
+		i += 1
+	}
+	return opts
+}
+
+run_generate_command :: proc(opts_in: Cli_Options) {
+	opts := opts_in
+	if opts.platform != "" {
+		run_platform_command(opts)
+		return
+	}
+
+	// If no explicit spec was provided and a cross-platform manifest exists,
+	// route through it. This makes `androidgen generate` work in a repo that
+	// has project.yaml + android.yaml + ios.yaml.
+	if opts.spec == "" && file_exists("project.yaml") && !file_exists("project.yml") {
+		if looks_like_manifest("project.yaml") {
+			manifest, err := load_manifest("project.yaml")
+			if err != "" {
+				fmt.eprintln("androidgen:", err)
+				os.exit(1)
+			}
+			opts.platform = manifest.default_platform
+			if opts.platform == "" do opts.platform = "android"
+			run_platform_command(opts)
+			return
+		}
+		opts.spec = "project.yaml"
+	}
+
+	spec := opts.spec
+	if spec == "" do spec = "project.yml"
+	if !file_exists(spec) {
+		fmt.eprintln("androidgen: spec not found:", spec)
+		os.exit(1)
+	}
+	err := generate_project(spec, opts.project, opts.project_root, opts)
+	if err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+}
+
+run_bindings_command :: proc(opts: Cli_Options) {
+	spec := opts.spec
+	if spec == "" do spec = "project.yml"
+	if !file_exists(spec) {
+		fmt.eprintln("androidgen: spec not found:", spec)
+		os.exit(1)
+	}
+	project, _, err := load_and_parse_project(spec, opts.project_root, "", opts.no_env)
+	if err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+	if len(project.bindings) == 0 {
+		fmt.eprintln("androidgen: no bindings configured in", spec)
+		os.exit(1)
+	}
+	if err := generate_bindings(&project); err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+	if !opts.quiet {
+		for b in project.bindings {
+			if b.odin != "" {
+				fmt.println("androidgen: bindings:", b.name, "->", b.header, b.odin, b.kotlin, b.jni)
+			} else {
+				fmt.println("androidgen: bindings:", b.name, "->", b.header, b.kotlin, b.jni)
+			}
+		}
+	}
+}
+
+run_cache_command :: proc(opts: Cli_Options) {
+	spec := opts.spec
+	if spec == "" {
+		if file_exists("project.yml") {
+			spec = "project.yml"
+		} else if file_exists("project.yaml") && !looks_like_manifest("project.yaml") {
+			spec = "project.yaml"
+		} else {
+			spec = "project.yml"
+		}
+	}
+	if !file_exists(spec) {
+		fmt.eprintln("androidgen: spec not found:", spec)
+		os.exit(1)
+	}
+	err := write_cache_for_spec(spec, opts.project_root, opts.no_env, opts.cache_path, opts.quiet)
+	if err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+}
+
+run_dump_command :: proc(args: []string) {
+	spec := ""
+	project_root := ""
+	dump_type := "yaml"
+	out_file := ""
+	no_env := false
+	i := 0
+	for i < len(args) {
+		switch args[i] {
+		case "-s", "--spec":
+			i += 1
+			spec = args[i]
+		case "-r", "--project-root":
+			i += 1
+			project_root = args[i]
+		case "-t", "--type":
+			i += 1
+			dump_type = args[i]
+		case "-f", "--file":
+			i += 1
+			out_file = args[i]
+		case "-n", "--no-env":
+			no_env = true
+		case "-q", "--quiet":
+			// dump output is the payload; quiet has no effect
+		case:
+			fmt.eprintln("androidgen dump: unknown argument:", args[i])
+			os.exit(1)
+		}
+		i += 1
+	}
+	if spec == "" {
+		if file_exists("project.yml") {
+			spec = "project.yml"
+		} else if file_exists("project.yaml") {
+			spec = "project.yaml"
+		} else {
+			spec = "project.yml"
+		}
+	}
+	value: Value
+	if is_legacy_file(spec) {
+		project, _, legacy_err := load_legacy_project(spec, project_root, "")
+		if legacy_err != "" {
+			fmt.eprintln("androidgen:", legacy_err)
+			os.exit(1)
+		}
+		value = project.raw
+	} else {
+		loaded, err := load_spec_opts(spec, project_root, no_env)
+		if err != "" {
+			fmt.eprintln("androidgen:", err)
+			os.exit(1)
+		}
+		value = resolve_target_templates(loaded.value)
+	}
+	output: string
+	switch dump_type {
+	case "yaml", "parsed-yaml":
+		output = yaml_dump_value(value)
+	case "json", "parsed-json":
+		output = json_dump_value(value)
+	case "summary":
+		output = dump_summary(value)
+	case:
+		fmt.eprintln("androidgen dump: unknown type:", dump_type)
+		os.exit(1)
+	}
+	if out_file != "" {
+		parent := filepath.dir(out_file)
+		if parent != "" do os.mkdir_all(parent)
+		if os.write_entire_file_from_string(out_file, output) != nil {
+			fmt.eprintln("androidgen: cannot write", out_file)
+			os.exit(1)
+		}
+	} else {
+		fmt.print(output)
+	}
+}
+
+dump_summary :: proc(v: Value) -> string {
+	m, _ := v.(Map)
+	out := fmt.tprintf("Name: %s\n", m_get_string(m, "name"))
+	if targets, has := m_get(m, "targets"); has {
+		if tm, ok := targets.(Map); ok {
+			out = strings.concatenate([]string{out, "Targets:\n"})
+			for key in tm.keys {
+				t, _ := tm.values[key].(Map)
+				out = strings.concatenate([]string{out, fmt.tprintf("  %s: %s %s\n", key, m_get_string(t, "platform"), m_get_string(t, "type"))})
+			}
+		}
+	}
+	if configs, has := m_get(m, "configs"); has {
+		if cm, ok := configs.(Map); ok {
+			out = strings.concatenate([]string{out, "Configs:\n"})
+			for key in cm.keys {
+				out = strings.concatenate([]string{out, fmt.tprintf("  %s: %s\n", key, value_string(cm.values[key]))})
+			}
+		}
+	}
+	return out
+}
+
+run_platforms_command :: proc(args: []string) {
+	manifest_path := "project.yaml"
+	if len(args) > 0 do manifest_path = args[0]
+	manifest, err := load_manifest(manifest_path)
+	if err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+	fmt.println("Project:", manifest.name)
+	for p in manifest.platforms {
+		status := "available"
+		if p.generator == "xcodegen" && !command_exists("xcodegen") do status = "xcodegen not found"
+		fmt.printf("  %-10s %-12s %-30s %s\n", p.name, p.generator, p.spec, status)
+	}
+}
+
+run_check_command :: proc(args: []string) {
+	manifest_path := "project.yaml"
+	if len(args) > 0 do manifest_path = args[0]
+	err := check_manifest(manifest_path)
+	if err != "" {
+		fmt.eprintln("androidgen: coherence check failed")
+		fmt.eprintln(err)
+		os.exit(1)
+	}
+	fmt.println("androidgen: coherence check passed")
+}
+
+run_platform_command :: proc(opts: Cli_Options) {
+	manifest_path := "project.yaml"
+	manifest, err := load_manifest(manifest_path)
+	if err != "" {
+		fmt.eprintln("androidgen:", err)
+		os.exit(1)
+	}
+	selected := opts.platform
+	if selected == "" do selected = manifest.default_platform
+	if selected == "" do selected = "android"
+	failed := false
+	ran := false
+	for p in manifest.platforms {
+		if !strings.equal_fold(selected, "all") && !strings.equal_fold(selected, p.name) do continue
+		ran = true
+		if !p.enabled {
+			if !opts.quiet do fmt.println("androidgen:", p.name, "is disabled")
+			continue
+		}
+		ok := run_platform(manifest, p, opts)
+		if !ok {
+			failed = true
+			if !opts.keep_going do break
+		}
+	}
+	if !ran {
+		fmt.eprintln("androidgen: no platform named", selected)
+		os.exit(1)
+	}
+	if failed do os.exit(1)
+}
+
+run_platform :: proc(manifest: Manifest, p: Platform_Entry, opts: Cli_Options) -> bool {
+	spec := p.spec
+	project := p.project
+	root := p.project_root
+	if root == "" do root = manifest.root
+	if opts.project != "" do project = opts.project
+	if opts.project_root != "" do root = opts.project_root
+	if !filepath.is_abs(spec) do spec = join_path(manifest.root, spec)
+	if opts.project != "" {
+		if abs_out, err := filepath.abs(project); err == nil do project = abs_out
+	} else if !filepath.is_abs(project) {
+		project = join_path(manifest.root, project)
+	}
+	if !filepath.is_abs(root) do root = join_path(manifest.root, root)
+
+	if p.generator == "androidgen" {
+		if opts.dry_run {
+			fmt.println(strings.join([]string{"androidgen", "generate", "--spec", spec, "--project", project, "--project-root", root}, " "))
+			return true
+		}
+		child := opts
+		child.platform = ""
+		child.spec = spec
+		child.project = project
+		child.project_root = root
+		for arg in p.args {
+			if arg == "--use-cache" do child.use_cache = true
+			if arg == "--quiet" do child.quiet = true
+		}
+		err := generate_project(spec, project, root, child)
+		if err != "" {
+			fmt.eprintln("androidgen:", err)
+			return false
+		}
+		return true
+	}
+
+	if p.generator == "xcodegen" {
+		command := make([dynamic]string)
+		append(&command, "xcodegen", "generate", "--spec", spec, "--project", project, "--project-root", root)
+		if opts.quiet do append(&command, "--quiet")
+		if opts.use_cache do append(&command, "--use-cache")
+		if opts.no_env do append(&command, "--no-env")
+		for arg in p.args do append(&command, arg)
+		if opts.dry_run {
+			fmt.println(strings.join(command[:], " "))
+			return true
+		}
+		if !command_exists("xcodegen") {
+			fmt.eprintln("androidgen: xcodegen not found (iOS generation requires macOS + XcodeGen)")
+			return false
+		}
+		os.mkdir_all(project)
+		return run_process(command[:], manifest.root)
+	}
+
+	// Custom generator: run the command template.
+	if p.command != "" {
+		cmd := p.command
+		cmd, _ = strings.replace_all(cmd, "{spec}", spec)
+		cmd, _ = strings.replace_all(cmd, "{project}", project)
+		cmd, _ = strings.replace_all(cmd, "{root}", root)
+		cmd, _ = strings.replace_all(cmd, "{name}", manifest.name)
+		if opts.dry_run {
+			fmt.println(cmd)
+			return true
+		}
+		return run_shell(cmd, manifest.root)
+	}
+	fmt.eprintln("androidgen: unknown generator", p.generator)
+	return false
+}
+
+run_process :: proc(args: []string, working_dir: string) -> bool {
+	desc := os.Process_Desc {
+		command     = args,
+		working_dir = working_dir,
+	}
+	state, stdout, stderr, err := os.process_exec(desc, context.allocator)
+	if err != nil {
+		fmt.eprintln("androidgen: failed to run", strings.join(args, " "), ":", err)
+		return false
+	}
+	if len(stdout) > 0 do fmt.print(string(stdout))
+	if len(stderr) > 0 do fmt.eprint(string(stderr))
+	return state.success
+}
+
+run_shell :: proc(command, working_dir: string) -> bool {
+	return run_process([]string{"sh", "-c", command}, working_dir)
+}
+
+command_exists :: proc(name: string) -> bool {
+	state, _, _, err := os.process_exec(os.Process_Desc{command = []string{"sh", "-c", strings.concatenate([]string{"command -v ", name})}}, context.allocator)
+	return err == nil && state.success
+}
+
+file_exists :: proc(path: string) -> bool {
+	return os.is_file(path)
 }

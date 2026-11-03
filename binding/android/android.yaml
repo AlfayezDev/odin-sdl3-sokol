@@ -1,0 +1,52 @@
+# androidgen spec for the generated Gradle project (android/ is generated).
+# Hand-written Android glue lives next to this file.
+
+name: odin-sdl3-mobile
+
+options:
+  deploymentTarget:
+    Android: 29
+  android:
+    compileSdk: 35
+    buildToolsVersion: 35.0.0
+    ndkVersion: 28.2.13676358
+    agpVersion: 8.7.3
+    gradleVersion: 8.12
+    gradleSha256: 7a00d51fb93147819aab76024feece20b6b84e420694101f276be952e08bef03
+    kotlinVersion: 2.0.21
+    outputDirectory: ../../android
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  app:
+    type: application
+    platform: Android
+    sources:
+      - path: .
+        excludes:
+          - android.yaml
+      - path: ../../deps/SDL3-3.2.28/android-project/app/src/main/java
+      - path: ../../build/android/jni
+        buildPhase: jniLibs
+    settings:
+      base:
+        applicationId: dev.alfayez.odinsokol
+        namespace: dev.alfayez.odinsokol
+        versionCode: 1
+        versionName: "1.0"
+    android:
+      abiFilters: [arm64-v8a, x86_64]
+
+bindings:
+  - name: bridge
+    sourceLanguage: odin
+    source: ../../app/bridge.odin
+    header: ../../binding/api/bridge.h
+    odin: ../../vendors/bridge/bridge.odin
+    kotlin: ../../binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt
+    jni: ../../build/gen/bridge_jni.c
+    package: dev.alfayez.odinsokol
+    class: OdinBridge

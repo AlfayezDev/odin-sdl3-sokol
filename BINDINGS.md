@@ -1,8 +1,9 @@
 # Bindings — Odin ↔ Kotlin ↔ iOS
 
 One Odin file is the contract: **`app/bridge.odin`**. Every `proc "c"`
-declaration in it is part of the cross-language API, and `bridgegen`
-(vendored under `tools/bridgegen`) turns it into all platform plumbing.
+declaration in it is part of the cross-language API. The generic
+**androidgen** tool (vendored under `tools/androidgen`) reads it through its
+Odin adapter and generates all platform plumbing.
 
 ## The rule
 
@@ -11,11 +12,12 @@ hello :: proc "c" () -> cstring { ... }   // body = Odin implements it
 show_toast :: proc "c" (msg: cstring)     // no body = the platform implements it
 ```
 
-- **With a body** → an export. Callers: Kotlin gets `external fun hello()`,
-  Swift calls it directly through the generated header.
+- **With a body** → an export. Callers: Kotlin gets
+  `external fun hello()`, Swift calls it directly through the generated
+  header.
 - **Without a body** → an import. Implement it per platform (Swift
-  `@_cdecl`, the generated Kotlin dispatcher, or the desktop stub); Odin
-  calls it through the generated foreign block (`libs:bridge`).
+  `@_cdecl`, Kotlin `PlatformHandler`, or the desktop stub); Odin calls it
+  through the generated foreign block (`libs:bridge`).
 
 ## Adding a binding — 2 steps
 
@@ -31,10 +33,10 @@ show_toast :: proc "c" (msg: cstring)     // no body = the platform implements i
    (For imports, write the declaration without a body, then implement the
    platform side: Swift/Kotlin/desktop stub.)
 
-2. **`odin run . -- bridge`** — done. All artifacts regenerate; the
-   android/ios targets also regenerate automatically when you build them.
+2. **`odin run . -- bindings`** — done. All artifacts regenerate; the
+   Android target also regenerates them automatically.
 
-## What bridgegen emits
+## What androidgen emits
 
 | Output | Consumed by |
 |---|---|
@@ -53,7 +55,7 @@ missing implementation is a compile error, not a silent runtime break.
 | `cstring`| `const char *`  | `String` | `jstring`| `Ljava/lang/String;`  |
 | `i32`    | `int32_t`       | `Int`    | `jint`   | `I`                   |
 | `i64`    | `int64_t`       | `Long`   | `jlong`  | `J`                   |
-| `b32`    | `bool`          | `Boolean`| `jboolean`| `Z`                  |
+| `b32`    | `int32_t`       | `Boolean`| `jboolean`| `Z`                  |
 | `f32`    | `float`         | `Float`  | `jfloat` | `F`                   |
 | `f64`    | `double`        | `Double` | `jdouble`| `D`                   |
 
@@ -61,9 +63,9 @@ missing implementation is a compile error, not a silent runtime break.
 
 - **String ownership**: returned `cstring` is borrowed (Odin owns it);
   passed-in strings are copied by the receiver.
-- **Imports return nothing** in phase 1; they dispatch on the UI thread
-  through the generated `onPlatformEvent(name, args)` — put platform
-  behavior in that `when` block (committed glue, edit freely).
+- **Kotlin imports** go through the generated nested
+  `OdinBridge.PlatformHandler`. Set `OdinBridge.platform` (or call
+  `OdinBridge.setPlatform(...)` from Java) before native callbacks arrive.
 - **iOS** has no generation: Swift imports the header via
   `binding/ios/Bridging.h` and implements imports with `@_cdecl`.
   `entry.m` is SDL C-entry machinery — keep it C, don't move it to Swift.
@@ -72,10 +74,9 @@ missing implementation is a compile error, not a silent runtime break.
 - Declarations must be single-line. Export bodies open with `{` on the
   declaration line.
 
-
 ## Runtime flow (worked example)
 
 See [`docs/bindings-example/README.md`](docs/bindings-example/README.md)
 for the full walkthrough of how `hello` travels Kotlin → JNI wrapper →
-Odin, and `show_toast` travels Odin → JNI up-call → Kotlin dispatcher →
-Toast, with the generated symbol names at each hop.
+Odin, and `show_toast` travels Odin → JNI up-call → Kotlin
+`PlatformHandler` → Toast, with the generated symbol names at each hop.
