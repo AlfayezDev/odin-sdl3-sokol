@@ -5,8 +5,8 @@ Authoritative reference: [`BINDINGS.md`](../../BINDINGS.md).
 
 ## The contract file
 
-`binding/spec/binding.odin` declares the API; it is parsed by odinbinder and is
-not compiled into the app:
+`binding/binding.odin` declares the API; it is parsed by odinbinder and is not
+compiled into the app:
 
 ```odin
 @(odinbinder={direction="export"})
@@ -15,10 +15,6 @@ hello :: proc "c" () -> cstring   // Odin implements, platform calls
 @(odinbinder={direction="import"})
 show_toast :: proc "c" (msg: cstring)   // platform implements, Odin calls
 ```
-
-`binding/spec/binding.android.odin` and `binding/spec/binding.ios.odin` merge
-over the shared file by name. Today both only override `show_toast` with the
-right `thread` metadata.
 
 Everything below is derived from those files by `odin run . -- bindings`.
 The generated folders are ignored by git; a clean checkout contains only the

@@ -2,7 +2,6 @@ package odinbinder
 
 import "core:fmt"
 import "core:os"
-import "core:path/filepath"
 import "core:strings"
 
 Options :: struct {
@@ -114,38 +113,18 @@ parse_target_name :: proc(name: string) -> (Target, bool) {
 	return .Android, false
 }
 
-load_for_target :: proc(spec: string, target: Target) -> (Module, string) {
+load_module :: proc(spec: string) -> (Module, string) {
 	info, err := os.stat(spec, context.allocator)
 	if err != nil do return {}, fmt.tprintf("cannot stat spec: %s", spec)
 	is_dir := info.type == .Directory
 	os.file_info_delete(info, context.allocator)
+	path := spec
 	if is_dir {
-		shared := join_path(spec, "binding.odin")
-		target_file := target_filename(spec, target)
-		base := Module {
-			name          = "binding",
-			android_pkg   = "com.example",
-			android_class = "Bridge",
-			ios_module    = "Bridge",
-		}
-		if os.is_file(shared) {
-			parsed, err2 := parse_binding_file(shared)
-			if err2 != "" do return {}, err2
-			base = parsed
-		}
-		if os.is_file(target_file) {
-			parsed, err2 := parse_binding_file(target_file)
-			if err2 != "" do return {}, err2
-			base = merge_module(base, parsed)
-		}
-		if !os.is_file(shared) && !os.is_file(target_file) {
-			return {}, fmt.tprintf("no binding.odin or %s in %s", filepath.base(target_file), spec)
-		}
-		fill_module_defaults(&base)
-		return base, ""
+		path = join_path(spec, "binding.odin")
+		if !os.is_file(path) do return {}, fmt.tprintf("no binding.odin in %s", spec)
 	}
-	module, err2 := parse_binding_file(spec)
-	if err2 != "" do return {}, err2
+	module, parse_err := parse_binding_file(path)
+	if parse_err != "" do return {}, parse_err
 	fill_module_defaults(&module)
 	return module, ""
 }
@@ -158,41 +137,30 @@ fill_module_defaults :: proc(m: ^Module) {
 }
 
 check_spec :: proc(opts: Options) -> string {
-	if strings.equal_fold(opts.target, "all") {
-		for t in ([]Target{.Android, .Ios}) {
-			m, err := load_for_target(opts.spec, t)
-			if err != "" do return err
-			if verr := validate_module(m); verr != "" do return verr
+	if !strings.equal_fold(opts.target, "all") {
+		if _, ok := parse_target_name(opts.target); !ok {
+			return fmt.tprintf("unknown target %q", opts.target)
 		}
-		return ""
 	}
-	target, ok := parse_target_name(opts.target)
-	if !ok do return fmt.tprintf("unknown target %q", opts.target)
-	m, err := load_for_target(opts.spec, target)
+	module, err := load_module(opts.spec)
 	if err != "" do return err
-	return validate_module(m)
+	return validate_module(module)
 }
 
 generate :: proc(opts: Options) -> string {
+	module, err := load_module(opts.spec)
+	if err != "" do return err
+	if verr := validate_module(module); verr != "" do return verr
+
+	if opts.header != "" {
+		if e := emit_header(module, opts.header); e != "" do return e
+	}
+	if opts.odin != "" {
+		if e := emit_odin(module, opts.odin); e != "" do return e
+	}
+
 	if strings.equal_fold(opts.target, "all") {
-		// Header and Odin declarations cover every target; each platform's
-		// Kotlin/Swift view is emitted from its own merged contract.
-		merged: Module
 		for t in ([]Target{.Android, .Ios}) {
-			module, err := load_for_target(opts.spec, t)
-			if err != "" do return err
-			if verr := validate_module(module); verr != "" do return verr
-			merged = merge_module(merged, module)
-		}
-		if opts.header != "" {
-			if e := emit_header(merged, opts.header); e != "" do return e
-		}
-		if opts.odin != "" {
-			if e := emit_odin(merged, opts.odin); e != "" do return e
-		}
-		for t in ([]Target{.Android, .Ios}) {
-			module, err2 := load_for_target(opts.spec, t)
-			if err2 != "" do return err2
 			if e := emit_platform(module, t, opts); e != "" do return e
 		}
 		return ""
@@ -200,15 +168,6 @@ generate :: proc(opts: Options) -> string {
 
 	target, ok := parse_target_name(opts.target)
 	if !ok do return fmt.tprintf("unknown target %q", opts.target)
-	module, err := load_for_target(opts.spec, target)
-	if err != "" do return err
-	if verr := validate_module(module); verr != "" do return verr
-	if opts.header != "" {
-		if e := emit_header(module, opts.header); e != "" do return e
-	}
-	if opts.odin != "" {
-		if e := emit_odin(module, opts.odin); e != "" do return e
-	}
 	return emit_platform(module, target, opts)
 }
 

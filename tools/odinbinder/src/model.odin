@@ -48,41 +48,11 @@ Module :: struct {
 	functions:     []Function,
 }
 
-merge_module :: proc(base, over: Module) -> Module {
-	out := base
-	if over.name != "" do out.name = over.name
-	if over.android_pkg != "" do out.android_pkg = over.android_pkg
-	if over.android_class != "" do out.android_class = over.android_class
-	if over.ios_module != "" do out.ios_module = over.ios_module
-	for f in over.functions {
-		replaced := false
-		for existing, i in out.functions {
-			if existing.name == f.name {
-				out.functions[i] = f
-				replaced = true
-				break
-			}
-		}
-		if !replaced do out.functions = append_func(out.functions, f)
-	}
-	return out
-}
-
 append_func :: proc(arr: []Function, f: Function) -> []Function {
 	out := make([]Function, len(arr) + 1)
 	copy(out[:len(arr)], arr)
 	out[len(arr)] = f
 	return out
-}
-
-target_filename :: proc(dir: string, t: Target) -> string {
-	switch t {
-	case .Android:
-		return join_path(dir, "binding.android.odin")
-	case .Ios:
-		return join_path(dir, "binding.ios.odin")
-	}
-	return ""
 }
 
 primitive_name :: proc(p: Primitive) -> string {

@@ -17,5 +17,5 @@ hello :: proc "c" () -> cstring
 @(odinbinder={direction="export"})
 add :: proc "c" (a, b: i32) -> i32
 
-@(odinbinder={direction="import"})
+@(odinbinder={direction="import", thread="ui"})
 show_toast :: proc "c" (msg: cstring)

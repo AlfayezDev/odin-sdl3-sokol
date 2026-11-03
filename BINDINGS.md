@@ -1,16 +1,14 @@
 # Bindings — Odin ↔ Kotlin ↔ iOS
 
-The cross-platform contract lives in Odin files under `binding/spec/`:
+The cross-platform contract is one Odin file:
 
 ```text
-binding/spec/binding.odin           # shared
-binding/spec/binding.android.odin   # Android overrides/additions
-binding/spec/binding.ios.odin       # iOS overrides/additions
+binding/binding.odin
 ```
 
-`tools/odinbinder` parses those files with Odin's own AST parser and emits the
-C header, Odin foreign declarations, Kotlin/JNI, and Swift bindings. The spec
-files are contracts, not compiled app code.
+`tools/odinbinder` parses that file with Odin's own AST parser and emits the
+C header, Odin foreign declarations, Kotlin/JNI, and Swift bindings. The
+contract is parsed, not compiled into the app.
 
 ## The rule
 
@@ -27,10 +25,8 @@ show_toast :: proc "c" (msg: cstring)
 A body on the declaration also infers `export`; a declaration without a body
 infers `import`. The explicit `direction` attribute is recommended for clarity.
 
-Target files are merged over the shared file by declaration name. With
-`--target all`, the C header and Odin declarations are the union of every
-target view; each platform's Kotlin/Swift output comes from its own merged
-view.
+One contract produces the C header, Odin imports, Kotlin, JNI, and Swift. Run
+all emitters with `--target all`, or one platform with `--target android|ios`.
 
 ## Metadata
 
@@ -52,12 +48,12 @@ show_toast :: proc "c" (msg: cstring)
 ```
 
 `thread="ui"` / `thread="main"` asks the generated platform wrapper to dispatch
-on the UI/main thread where supported. `binding.android.odin` and
-`binding.ios.odin` are the right place for platform-specific thread metadata.
+on the UI/main thread. The shared contract uses `thread="ui"` for `show_toast`,
+which works on both Android and iOS.
 
 ## Adding a binding — 2 steps
 
-1. Declare it in `binding/spec/binding.odin`, or in the target-specific file:
+1. Declare it in `binding/binding.odin`:
 
    ```odin
    @(odinbinder={direction="export"})
@@ -72,7 +68,7 @@ on the UI/main thread where supported. `binding.android.odin` and
    odin run . -- bindings
    ```
 
-The Android/iOS build commands also run this automatically.
+Every platform build also runs this automatically.
 
 ## What OdinBinder emits
 
@@ -100,7 +96,7 @@ binding/ios/generated/              iOS only
   GameBridge.swift
 ```
 
-Hand-written files stay outside these folders: `binding/spec/`,
+Hand-written files stay outside these folders: `binding/binding.odin`,
 `binding/android/android.yaml`, the Android activity, and `binding/ios/`
 sources such as `entry.m`, `Bridging.h`, `BridgePlatform.swift`, and
 `project.yaml`.
@@ -146,11 +142,7 @@ Records, enums, arrays, objects, callbacks, and async are the next layer.
 - Declarations must be single-line. Grouped parameters like `(a, b: i32)` work.
 - Returned `cstring` values are borrowed; the platform side must copy them
   before returning.
-- Platform files only override/add declarations; they do not replace the shared
-  file.
-- If a tool compiles the contract files, pass `-custom-attribute:odinbinder`.
-  The three files also redeclare symbols by design, so compile them
-  individually rather than as one package.
+- If a tool compiles the contract file, pass `-custom-attribute:odinbinder`.
 
 The binder is deliberately Odin-native: no YAML schema, no duplicate type
 definitions, and the C header is derived from the same declarations the app

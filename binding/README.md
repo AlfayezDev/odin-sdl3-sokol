@@ -9,21 +9,20 @@ odin run . -- bindings
 
 ## 1. The contract
 
-Declare the API in `binding/spec/binding.odin`:
+Declare the API in `binding/binding.odin`:
 
 ```odin
 @(odinbinder={direction="export"})
 hello :: proc "c" () -> cstring
 
-@(odinbinder={direction="import"})
+@(odinbinder={direction="import", thread="ui"})
 show_toast :: proc "c" (msg: cstring)
 ```
 
 - `export` — Odin implements it, the platform calls it.
 - `import` — the platform implements it, Odin calls it.
-
-Platform overrides go in `binding.android.odin` / `binding.ios.odin` and merge
-over the shared file by name.
+- `thread="ui"` — the generated wrapper dispatches to the main/UI thread, so
+  platform handlers can be plain functions.
 
 The `_config` record sets the generated names:
 

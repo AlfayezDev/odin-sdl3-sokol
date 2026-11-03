@@ -19,12 +19,10 @@ public class OdinsokolActivity extends SDLActivity {
         OdinBridge.setPlatform(new OdinBridge.PlatformHandler() {
             @Override
             public void showToast(String message) {
-                runOnUiThread(() -> {
-                    if (!isFinishing() && !isDestroyed()) {
-                        Toast.makeText(OdinsokolActivity.this, message, Toast.LENGTH_SHORT).show();
-                        Log.i(TAG, message);
-                    }
-                });
+                if (!isFinishing() && !isDestroyed()) {
+                    Toast.makeText(OdinsokolActivity.this, message, Toast.LENGTH_SHORT).show();
+                    Log.i(TAG, message);
+                }
             }
         });
 

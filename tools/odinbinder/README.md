@@ -10,12 +10,8 @@ No YAML schema, no separate IDL: the contract is Odin, parsed with
 ## Contract layout
 
 ```text
-binding/spec/binding.odin           # shared declarations + _config metadata
-binding/spec/binding.android.odin   # Android overrides/additions
-binding/spec/binding.ios.odin       # iOS overrides/additions
+binding/binding.odin   # declarations + _config metadata
 ```
-
-Target files merge over the shared file by declaration name.
 
 ```odin
 @(odinbinder={
@@ -41,20 +37,19 @@ attribute wins.
 ```sh
 odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
-build/tools/odinbinder generate --target all --spec binding/spec \
+build/tools/odinbinder generate --target all --spec binding \
   --header binding/generated/bridge.h \
   --odin binding/generated/bridge/bridge.odin \
   --kotlin binding/android/generated/kotlin/dev/example/app/OdinBridge.kt \
   --jni binding/android/generated/bridge_jni.c \
   --swift binding/ios/generated/GameBridge.swift
 
-build/tools/odinbinder check --spec binding/spec
+build/tools/odinbinder check --spec binding
 ```
 
-`--target android|ios|all`. With `--target all`, the header and Odin
-declarations are the union of both target views, while each platform's
-Kotlin/Swift output comes from its own merged view. In this repo the outputs
-are ignored and recreated by `odin run . -- bindings`.
+`--target android|ios|all`. One contract feeds the header, Odin declarations,
+Kotlin/JNI, and Swift; `--target all` writes every output. In this repo the
+outputs are ignored and recreated by `odin run . -- bindings`.
 
 ## Types
 
@@ -67,6 +62,5 @@ yet.
 
 - Declarations use `proc "c"`.
 - Imports cannot return `cstring`.
-- Binding spec files are contracts, not compiled app code. If a tool compiles
-  one, pass `-custom-attribute:odinbinder`; do not compile all target files as
-  one package because overrides redeclare names.
+- Binding contract files are parsed, not compiled app code. If a tool compiles
+  one, pass `-custom-attribute:odinbinder`.

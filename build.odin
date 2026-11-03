@@ -22,7 +22,7 @@ foreign {
 ANDROIDGEN :: "build/tools/androidgen"
 ODINBINDER :: "build/tools/odinbinder"
 ANDROID_SPEC :: "binding/android/android.yaml"
-BINDING_SPEC :: "binding/spec"
+BINDING_SPEC :: "binding"
 BRIDGE_HEADER :: "binding/generated/bridge.h"
 BRIDGE_ODIN :: "binding/generated/bridge/bridge.odin"
 ANDROID_KOTLIN :: "binding/android/generated/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"

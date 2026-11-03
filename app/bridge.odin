@@ -1,6 +1,6 @@
 package app
 
-// BINDINGS: the API contract lives in binding/spec/*.odin (see BINDINGS.md).
+// BINDINGS: the API contract lives in binding/binding.odin (see BINDINGS.md).
 // Implement exports from that contract here as `proc "c"` functions.
 // Imports are generated into gen:bridge (import it as `b` and call them).
 
