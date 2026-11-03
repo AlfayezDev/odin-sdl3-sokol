@@ -3,7 +3,7 @@ package app
 import "core:c"
 import "core:fmt"
 import "core:os"
-import "core:runtime"
+import "base:runtime"
 import sdl "vendor:sdl3"
 import sg "libs:sg"
 

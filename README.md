@@ -1,7 +1,7 @@
 # Odin + SDL3 + sokol_gfx
 
 One Odin app, 12 sokol_gfx demos, SDL3 as the platform layer.
-All build/run logic lives in `build.odin` — run it with odin itself.
+All build/run logic lives in `build.odin` + `build_*.odin` — run it with odin itself.
 
 ## Build & run
 
@@ -25,14 +25,34 @@ odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 
 ## Layout
 
-- `app/` — all Odin code (`main.odin`, `samples.odin`, `math4.odin`)
-- `vendors/sokol/` — vendored sokol C headers (the only C)
+Build entry points:
+
+- `build.odin` — CLI dispatch and shared helpers
+- `build_tools.odin` — odinbinder + androidgen bootstrap
+- `build_sdl.odin` — SDL config and sokol object compilation
+- `build_shaders.odin` — sokol-shdc generation
+- `build_desktop.odin` / `build_android.odin` / `build_ios.odin` — platform builds
+- `sdl3_build.sh` — Linux/Android SDL3 source build helper
+
+App code:
+
+- `app/main.odin` — SDL lifecycle, frame loop, smoke check
+- `app/samples.odin` — sample registry and shared helpers
+- `app/sample_*.odin` — one file per demo
+- `app/math4.odin` — 4x4 matrix helpers
+- `app/bridge.odin` — exported Odin bridge implementations
+
+Generated and vendored:
+
+- `deps/SDL3-3.2.28/` — SDL3 source, downloaded on first desktop/android build (not checked in)
+- `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
-- `shaders/samples/*.glsl` — shader sources; regenerate bindings with
-  `odin run . -- shaders` after editing
+- `vendors/bridge/bridge.odin` — generated import declarations
+- `shaders/samples/*.glsl` — shader sources; regenerate with `odin run . -- shaders`
 - `binding/spec/` — Odin binding contracts (`binding.odin`, `.android.odin`, `.ios.odin`)
-- `tools/odinbinder/` — Odin-native bridge generator (C/Odin/Kotlin/JNI/Swift)
+- `binding/api/bridge.h`, `binding/ios/GameBridge.swift`, `binding/android/.../OdinBridge.kt` — generated bridge files
+- `tools/odinbinder/` — Odin-native bridge generator
 - `tools/androidgen/` — vendored Android Gradle project generator
 - `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
 

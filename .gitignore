@@ -1,12 +1,5 @@
-build/
-android/.gradle/
-android/build/
-android/app/build/
-android/app/.cxx/
-android/local.properties/
-android/.idea/
-*.log
-android/app/src/main/jniLibs/
-/android/
 /build/
+/android/
 /odin-sokol
+*.log
+/deps/
