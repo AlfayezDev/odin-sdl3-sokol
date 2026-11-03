@@ -5,6 +5,8 @@ All build/run logic lives in `build.odin` + `build_*.odin` — run it with odin 
 
 ## Build & run
 
+Requires Odin `dev-2026-11` (pinned in `.mise.toml`).
+
 ```sh
 odin run . -- tools      # build odinbinder + androidgen, verify sokol-shdc
 odin run . -- shaders    # sokol-shdc -> vendors/shaders
