@@ -94,15 +94,34 @@ parse_enum_decl :: proc(name: string, e: ^ast.Enum_Type) -> (Enum, string) {
 			fname := expr_string(field.field)
 			if fname == "" do return {}, fmt.tprintf("enum %s: field has no name", name)
 			value: i64
+			parsed := false
 			#partial switch lit in field.value.derived_expr {
 			case ^ast.Basic_Lit:
 				v, ok := strconv.parse_int(lit.tok.text)
-				if !ok {
-					return {}, fmt.tprintf("enum %s.%s: value must be an integer literal", name, fname)
+				if ok {
+					value = i64(v)
+					parsed = true
 				}
-				value = i64(v)
-			case:
+			case ^ast.Unary_Expr:
+				if lit.op.kind == .Sub {
+					#partial switch inner in lit.expr.derived_expr {
+					case ^ast.Basic_Lit:
+						v, ok := strconv.parse_int(inner.tok.text)
+						if ok {
+							value = -i64(v)
+							parsed = true
+						}
+					}
+				}
+			}
+			if !parsed {
 				return {}, fmt.tprintf("enum %s.%s: value must be an integer literal", name, fname)
+			}
+			if underlying == "i32" && (value < -2147483648 || value > 2147483647) {
+				return {}, fmt.tprintf("enum %s.%s: value does not fit i32", name, fname)
+			}
+			if underlying == "u32" && (value < 0 || value > 4294967295) {
+				return {}, fmt.tprintf("enum %s.%s: value does not fit u32", name, fname)
 			}
 			append(&fields, Enum_Field{name = fname, value = value})
 			next = value + 1

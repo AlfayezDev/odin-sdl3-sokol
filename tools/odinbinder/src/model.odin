@@ -96,6 +96,11 @@ enum_first_field :: proc(e: Enum) -> string {
 	return e.fields[0].name
 }
 
+enum_first_value :: proc(e: Enum) -> i64 {
+	if len(e.fields) == 0 do return 0
+	return e.fields[0].value
+}
+
 c_type_for :: proc(module: Module, name: string) -> string {
 	if is_nullable_cstring(name) do return "const char *"
 	if u, ok := enum_underlying(module, name); ok do return c_type(u)
@@ -142,6 +147,13 @@ kotlin_default_for :: proc(module: Module, name: string) -> string {
 	if is_nullable_cstring(name) do return "null"
 	if e, ok := find_enum(module, name); ok do return fmt.tprintf("%s.%s", e.name, enum_first_field(e))
 	return kotlin_default(name)
+}
+
+kotlin_raw_default_for :: proc(module: Module, name: string) -> string {
+	if e, ok := find_enum(module, name); ok {
+		return fmt.tprintf("%s.%s.value", e.name, enum_first_field(e))
+	}
+	return kotlin_default_for(module, name)
 }
 
 swift_default_for :: proc(module: Module, name: string) -> string {
@@ -396,12 +408,16 @@ kotlin_export_name :: proc(module: Module, f: Function) -> string {
 }
 
 jni_return_default_for :: proc(module: Module, name: string) -> string {
-	if u, ok := enum_underlying(module, name); ok do return jni_return_default(u)
+	if e, ok := find_enum(module, name); ok {
+		return fmt.tprintf(" %d", enum_first_value(e))
+	}
 	return jni_return_default(name)
 }
 
 swift_raw_fallback :: proc(module: Module, name: string) -> string {
-	if u, ok := enum_underlying(module, name); ok do return swift_default(u)
+	if e, ok := find_enum(module, name); ok {
+		return fmt.tprintf("%s.%s.rawValue", e.name, swift_case(enum_first_field(e)))
+	}
 	return swift_default(name)
 }
 

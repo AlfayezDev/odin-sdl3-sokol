@@ -300,7 +300,11 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				line(&b, 2, call)
 			}
 		} else if e, ok := find_enum(module, f.ret); ok {
-			line(&b, 2, fmt.tprintf("return %s?.value ?: %s", call, kotlin_default(e.underlying)))
+			line(
+				&b,
+				2,
+				fmt.tprintf("return %s?.value ?: %s", call, kotlin_raw_default_for(module, f.ret)),
+			)
 		} else {
 			line(&b, 2, fmt.tprintf("return %s ?: %s", call, kotlin_default_for(module, f.ret)))
 		}
