@@ -55,6 +55,14 @@ build/tools/odinbinder check --spec app/bridge.odin
 Swift; `--target all` writes every output. In this repo the
 outputs are ignored and recreated by `odin run builder -- bindings`.
 
+## Tests
+
+```sh
+odin run builder -- test
+```
+
+The fixture lives in `tools/odinbinder/tests/binding.odin`.
+
 ## Types
 
 `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`

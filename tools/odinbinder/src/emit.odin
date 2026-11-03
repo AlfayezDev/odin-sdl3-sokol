@@ -126,7 +126,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				1,
 				fmt.tprintf(
 					"%s(%s)%s",
-					f.name,
+					kotlin_ident(f.name),
 					kotlin_enum_literal(e.underlying, f.value),
 					suffix,
 				),
@@ -142,7 +142,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				e.name,
 				"{",
 				"}",
-				e.fields[0].name,
+				kotlin_ident(e.fields[0].name),
 			),
 		)
 		line(&b, 1, "}")
@@ -603,7 +603,7 @@ emit_swift :: proc(module: Module, path: string) -> string {
 	for e in module.enums {
 		line(&b, 0, fmt.tprintf("public enum %s: %s %s", e.name, swift_type(e.underlying), "{"))
 		for f in e.fields {
-			line(&b, 1, fmt.tprintf("case %s = %d", swift_case(f.name), f.value))
+			line(&b, 1, fmt.tprintf("case %s = %d", swift_ident(swift_case(f.name)), f.value))
 		}
 		line(&b, 0, "}")
 		line(&b, 0, "")
@@ -680,7 +680,7 @@ emit_swift :: proc(module: Module, path: string) -> string {
 					"return %s(rawValue: %s) ?? .%s",
 					e.name,
 					call,
-					swift_case(enum_first_field(e)),
+					swift_ident(swift_case(enum_first_field(e))),
 				),
 			)
 		} else {
@@ -723,7 +723,7 @@ emit_swift :: proc(module: Module, path: string) -> string {
 						"%s(rawValue: %s) ?? .%s",
 						e.name,
 						p.name,
-						swift_case(enum_first_field(e)),
+						swift_ident(swift_case(enum_first_field(e))),
 					),
 				)
 			} else if is_nullable_cstring(p.typ) {

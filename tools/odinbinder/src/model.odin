@@ -145,20 +145,20 @@ swift_c_type_for :: proc(module: Module, name: string) -> string {
 
 kotlin_default_for :: proc(module: Module, name: string) -> string {
 	if is_nullable_cstring(name) do return "null"
-	if e, ok := find_enum(module, name); ok do return fmt.tprintf("%s.%s", e.name, enum_first_field(e))
+	if e, ok := find_enum(module, name); ok do return fmt.tprintf("%s.%s", e.name, kotlin_ident(enum_first_field(e)))
 	return kotlin_default(name)
 }
 
 kotlin_raw_default_for :: proc(module: Module, name: string) -> string {
 	if e, ok := find_enum(module, name); ok {
-		return fmt.tprintf("%s.%s.value", e.name, enum_first_field(e))
+		return fmt.tprintf("%s.%s.value", e.name, kotlin_ident(enum_first_field(e)))
 	}
 	return kotlin_default_for(module, name)
 }
 
 swift_default_for :: proc(module: Module, name: string) -> string {
 	if is_nullable_cstring(name) do return "nil"
-	if e, ok := find_enum(module, name); ok do return fmt.tprintf(".%s", swift_case(enum_first_field(e)))
+	if e, ok := find_enum(module, name); ok do return fmt.tprintf(".%s", swift_ident(swift_case(enum_first_field(e))))
 	return swift_default(name)
 }
 
@@ -416,7 +416,7 @@ jni_return_default_for :: proc(module: Module, name: string) -> string {
 
 swift_raw_fallback :: proc(module: Module, name: string) -> string {
 	if e, ok := find_enum(module, name); ok {
-		return fmt.tprintf("%s.%s.rawValue", e.name, swift_case(enum_first_field(e)))
+		return fmt.tprintf("%s.%s.rawValue", e.name, swift_ident(swift_case(enum_first_field(e))))
 	}
 	return swift_default(name)
 }
@@ -434,6 +434,109 @@ lower_first :: proc(s: string) -> string {
 
 swift_case :: proc(s: string) -> string {
 	return lower_first(camel(s))
+}
+
+kotlin_keywords := []string {
+	"as",
+	"break",
+	"class",
+	"continue",
+	"do",
+	"else",
+	"false",
+	"for",
+	"fun",
+	"if",
+	"in",
+	"interface",
+	"is",
+	"null",
+	"object",
+	"package",
+	"return",
+	"super",
+	"this",
+	"throw",
+	"true",
+	"try",
+	"typealias",
+	"typeof",
+	"val",
+	"var",
+	"when",
+	"while",
+}
+
+swift_keywords := []string {
+	"Any",
+	"as",
+	"associatedtype",
+	"break",
+	"case",
+	"catch",
+	"class",
+	"continue",
+	"default",
+	"defer",
+	"deinit",
+	"do",
+	"else",
+	"enum",
+	"extension",
+	"fallthrough",
+	"false",
+	"fileprivate",
+	"for",
+	"func",
+	"guard",
+	"if",
+	"import",
+	"in",
+	"init",
+	"inout",
+	"internal",
+	"is",
+	"let",
+	"nil",
+	"open",
+	"operator",
+	"private",
+	"precedencegroup",
+	"protocol",
+	"public",
+	"repeat",
+	"rethrows",
+	"return",
+	"self",
+	"Self",
+	"static",
+	"struct",
+	"subscript",
+	"super",
+	"switch",
+	"throw",
+	"throws",
+	"true",
+	"try",
+	"typealias",
+	"var",
+	"where",
+	"while",
+}
+
+is_keyword :: proc(words: []string, word: string) -> bool {
+	for w in words do if w == word do return true
+	return false
+}
+
+kotlin_ident :: proc(name: string) -> string {
+	if is_keyword(kotlin_keywords[:], name) do return fmt.tprintf("`%s`", name)
+	return name
+}
+
+swift_ident :: proc(name: string) -> string {
+	if is_keyword(swift_keywords[:], name) do return fmt.tprintf("`%s`", name)
+	return name
 }
 
 camel :: proc(s: string) -> string {

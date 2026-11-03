@@ -11,6 +11,7 @@ Requires Odin `dev-2026-11` (pinned in `.mise.toml`).
 odin run builder -- tools      # build odinbinder + androidgen, verify sokol-shdc
 odin run builder -- shaders    # sokol-shdc -> vendors/shaders
 odin run builder -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
+odin run builder -- test       # odinbinder regression tests
 
 odin run builder -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
 odin run builder -- android    # prebuilt SDL3 AAR + NDK build + gradle APK + adb install/launch

@@ -68,6 +68,9 @@ collect_enum_decl :: proc(v: ^ast.Value_Decl, module: ^Module) -> string {
 	if name == "" do return ""
 	#partial switch e in v.values[0].derived_expr {
 	case ^ast.Enum_Type:
+		if _, exists := find_enum(module^, name); exists {
+			return fmt.tprintf("duplicate enum %s", name)
+		}
 		enum_decl, err := parse_enum_decl(name, e)
 		if err != "" do return err
 		module.enums = append_enum(module.enums, enum_decl)
@@ -88,11 +91,17 @@ parse_enum_decl :: proc(name: string, e: ^ast.Enum_Type) -> (Enum, string) {
 	for f in e.fields {
 		#partial switch field in f.derived_expr {
 		case ^ast.Ident:
+			for existing in fields {
+				if existing.name == field.name do return {}, fmt.tprintf("enum %s: duplicate field %s", name, field.name)
+			}
 			append(&fields, Enum_Field{name = field.name, value = next})
 			next += 1
 		case ^ast.Field_Value:
 			fname := expr_string(field.field)
 			if fname == "" do return {}, fmt.tprintf("enum %s: field has no name", name)
+			for existing in fields {
+				if existing.name == fname do return {}, fmt.tprintf("enum %s: duplicate field %s", name, fname)
+			}
 			value: i64
 			parsed := false
 			#partial switch lit in field.value.derived_expr {
@@ -130,6 +139,13 @@ parse_enum_decl :: proc(name: string, e: ^ast.Enum_Type) -> (Enum, string) {
 		}
 	}
 	if len(fields) == 0 do return {}, fmt.tprintf("enum %s has no fields", name)
+	for i in 0 ..< len(fields) {
+		for j in i + 1 ..< len(fields) {
+			if swift_case(fields[i].name) == swift_case(fields[j].name) {
+				return {}, fmt.tprintf("enum %s: fields %s and %s collide in Swift", name, fields[i].name, fields[j].name)
+			}
+		}
+	}
 	return Enum{name = name, underlying = underlying, fields = fields[:]}, ""
 }
 

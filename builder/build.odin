@@ -3,6 +3,7 @@ package odin_sokol_build
 // Unified build orchestrator. Run from the repo root:
 //   odin run builder --            (desktop, default)
 //   odin run builder -- tools      (build odinbinder + androidgen, verify sokol-shdc)
+//   odin run builder -- test       (run odinbinder regression tests)
 //   odin run builder -- shaders    (sokol-shdc -> vendors/shaders)
 //   odin run builder -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
 //   odin run builder -- desktop
@@ -53,6 +54,8 @@ main :: proc() {
 		gen_bindings()
 	case "tools":
 		ensure_tools()
+	case "test":
+		run_tests()
 	case:
 		fmt.eprintln("unknown target:", target)
 		fmt.eprintln("usage: odin run builder -- [desktop|android|ios|shaders|bindings|tools]")

@@ -33,6 +33,10 @@ shdc_path :: proc() -> string {
 	return "third_party/sokol-shdc/bin/sokol-shdc"
 }
 
+run_tests :: proc() {
+	if !sh("sh tools/odinbinder/test.sh") do fail("odinbinder tests failed")
+}
+
 // regenerate the cross-platform binding artifacts from app/bridge.odin
 gen_bindings :: proc() {
 	ensure_tools()

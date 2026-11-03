@@ -10,6 +10,7 @@ Swift bridge.
 
 ```sh
 odin run builder -- bindings
+odin run builder -- test
 ```
 
 Build it directly:
