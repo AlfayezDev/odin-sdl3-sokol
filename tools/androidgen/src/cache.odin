@@ -26,9 +26,6 @@ default_cache_path :: proc(spec_path: string) -> string {
 
 collect_tracked_files :: proc(project: ^Project) -> []string {
 	out := make([dynamic]string)
-	for b in project.bindings {
-		if os.is_file(b.source) do append(&out, b.source)
-	}
 	for t in project.targets {
 		for source in t.sources {
 			path := source.path

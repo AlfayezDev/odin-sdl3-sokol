@@ -2,9 +2,9 @@ package app
 
 // BINDINGS: the API contract lives in binding/spec/*.odin (see BINDINGS.md).
 // Implement exports from that contract here as `proc "c"` functions.
-// Imports are generated into libs:bridge (import it as `b` and call them).
+// Imports are generated into gen:bridge (import it as `b` and call them).
 
-import b "libs:bridge"
+import b "gen:bridge"
 
 // ---- exports: odin -> kotlin/swift ----
 
@@ -22,5 +22,7 @@ add :: proc "c" (a, b: i32) -> i32 {
 
 // call once during app init: proves the odin -> platform direction
 bridge_init :: proc() {
-	b.show_toast("hello from odin")
+	when (ODIN_OS == .Linux && ODIN_PLATFORM_SUBTARGET == .Android) || ODIN_PLATFORM_SUBTARGET_IOS {
+		b.show_toast("hello from odin")
+	}
 }

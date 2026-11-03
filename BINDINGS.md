@@ -78,11 +78,29 @@ The Android/iOS build commands also run this automatically.
 
 | Output | Consumed by |
 |---|---|
-| `binding/api/bridge.h` | C ABI contract |
-| `vendors/bridge/bridge.odin` | Odin app (`libs:bridge`) |
-| `binding/android/java/.../OdinBridge.kt` | Android activity |
-| `build/gen/bridge_jni.c` | `libmain.so` link |
-| `binding/ios/GameBridge.swift` | Xcode target |
+| `binding/generated/bridge.h` | shared C ABI contract |
+| `binding/generated/bridge/bridge.odin` | Odin app (`gen:bridge`) |
+| `binding/android/generated/kotlin/.../OdinBridge.kt` | Android activity |
+| `binding/android/generated/bridge_jni.c` | `libmain.so` link |
+| `binding/ios/generated/GameBridge.swift` | Xcode target |
+
+Generated files are grouped by platform:
+
+```text
+binding/generated/                  shared ABI
+  bridge.h
+  bridge/bridge.odin
+binding/android/generated/          Android only
+  bridge_jni.c
+  kotlin/.../OdinBridge.kt
+binding/ios/generated/              iOS only
+  GameBridge.swift
+```
+
+Hand-written files stay outside these folders: `binding/spec/`,
+`binding/android/android.yaml`, the Android activity, and `binding/ios/`
+sources such as `entry.m`, `Bridging.h`, `BridgePlatform.swift`, and
+`project.yaml`.
 
 Current type support is intentionally small:
 
@@ -103,7 +121,8 @@ Records, enums, arrays, objects, callbacks, and async are the next layer.
 - **iOS**: the generated Swift enum exposes `OdinBridge.PlatformHandler`.
   `binding/ios/BridgePlatform.swift` installs it with
   `odinbinder_ios_install()`, called from `entry.m`.
-- **Desktop**: `binding/desktop/bridge.c` implements imports for local runs.
+- **Desktop**: no bridge backend for now; desktop builds run the app without the
+  platform import calls.
 
 ## Type map
 

@@ -37,10 +37,10 @@ shdc_path :: proc() -> string {
 gen_bindings :: proc() {
 	ensure_tools()
 	if !sh(fmt.tprintf(
-		"%s generate --target all --spec %s --header binding/api/bridge.h --odin vendors/bridge/bridge.odin --kotlin binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --swift binding/ios/GameBridge.swift --quiet",
-		ODINBINDER, BINDING_SPEC,
+		"%s generate --target all --spec %s --header %s --odin %s --kotlin %s --jni %s --swift %s --quiet",
+		ODINBINDER, BINDING_SPEC, BRIDGE_HEADER, BRIDGE_ODIN, ANDROID_KOTLIN, ANDROID_JNI, IOS_SWIFT,
 	)) {
 		fail("odinbinder failed")
 	}
-	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, GameBridge.swift, bridge_jni.c")
+	fmt.println("bindings regenerated: binding/generated and platform generated folders")
 }

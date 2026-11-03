@@ -225,7 +225,6 @@ Project :: struct {
 	packages:        map[string]Package,
 	setting_groups:  map[string]Value,
 	project_settings: Settings,
-	bindings:         []Binding_Config,
 	raw:             Map,
 	warnings:        [dynamic]string,
 }
@@ -290,9 +289,6 @@ parse_project :: proc(loaded: Spec_Load_Result, output_override: string) -> (Pro
 		}
 	}
 	if len(project.targets) == 0 do return {}, "spec contains no Android targets"
-	bindings, bindings_err := parse_bindings(m, &project, loaded.disable_env)
-	if bindings_err != "" do return {}, bindings_err
-	project.bindings = bindings
 	for t in project.targets {
 		if t.android.native_build.present && len(t.android.native_build.abis) == 0 {
 			return {}, fmt.tprintf("target %s: nativeBuild requires abis or abiFilters", t.name)

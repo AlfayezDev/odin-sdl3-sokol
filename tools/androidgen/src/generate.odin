@@ -29,11 +29,6 @@ generate_project :: proc(spec_path, output_override, project_root: string, opts:
 			return fmt.tprintf("preGenCommand failed: %s", project.options.pre_gen_command)
 		}
 	}
-	if err := generate_bindings(&project); err != "" do return err
-	if !opts.quiet && len(project.bindings) > 0 {
-		fmt.println("androidgen: generated", len(project.bindings), "binding set(s)")
-	}
-
 	cache_path := opts.cache_path
 	if cache_path == "" do cache_path = default_cache_path(loaded.path)
 	if opts.use_cache {

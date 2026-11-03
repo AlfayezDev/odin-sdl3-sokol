@@ -29,7 +29,6 @@ usage :: proc() {
 	fmt.println("  androidgen generate [options]")
 	fmt.println("  androidgen cache [options]")
 	fmt.println("  androidgen dump [options]")
-	fmt.println("  androidgen bindings [options]")
 	fmt.println("  androidgen check [project.yaml]")
 	fmt.println("  androidgen platforms [project.yaml]")
 	fmt.println()
@@ -65,9 +64,6 @@ main :: proc() {
 		run_cache_command(opts)
 	case "dump":
 		run_dump_command(args[2:])
-	case "bindings":
-		opts := parse_cli(args[2:])
-		run_bindings_command(opts)
 	case "check":
 		run_check_command(args[2:])
 	case "platforms":
@@ -177,37 +173,6 @@ run_generate_command :: proc(opts_in: Cli_Options) {
 	if err != "" {
 		fmt.eprintln("androidgen:", err)
 		os.exit(1)
-	}
-}
-
-run_bindings_command :: proc(opts: Cli_Options) {
-	spec := opts.spec
-	if spec == "" do spec = "project.yml"
-	if !file_exists(spec) {
-		fmt.eprintln("androidgen: spec not found:", spec)
-		os.exit(1)
-	}
-	project, _, err := load_and_parse_project(spec, opts.project_root, "", opts.no_env)
-	if err != "" {
-		fmt.eprintln("androidgen:", err)
-		os.exit(1)
-	}
-	if len(project.bindings) == 0 {
-		fmt.eprintln("androidgen: no bindings configured in", spec)
-		os.exit(1)
-	}
-	if err := generate_bindings(&project); err != "" {
-		fmt.eprintln("androidgen:", err)
-		os.exit(1)
-	}
-	if !opts.quiet {
-		for b in project.bindings {
-			if b.odin != "" {
-				fmt.println("androidgen: bindings:", b.name, "->", b.header, b.odin, b.kotlin, b.jni)
-			} else {
-				fmt.println("androidgen: bindings:", b.name, "->", b.header, b.kotlin, b.jni)
-			}
-		}
 	}
 }
 

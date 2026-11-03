@@ -25,42 +25,55 @@ Everything below is derived from those files by `odin run . -- bindings`.
 ## Direction 1 — Kotlin calls Odin (`hello`)
 
 ```
-android: OdinBridge.hello()                        (OdinBridge.kt, generated external fun)
-   └─ Java_dev_alfayez_odinsokol_OdinBridge_hello  (build/gen/bridge_jni.c, generated)
+android: OdinBridge.hello()                        (generated Kotlin bridge)
+   └─ Java_dev_alfayez_odinsokol_OdinBridge_hello  (binding/android/generated/bridge_jni.c)
         └─ hello()                                 (app/bridge.odin, your Odin code)
 ```
 
 iOS does the same without JNI: Swift calls the C symbol through
-`@_silgen_name("hello")` inside the generated `binding/ios/GameBridge.swift`.
+`@_silgen_name("hello")` inside the generated
+`binding/ios/generated/GameBridge.swift`.
 
 ## Direction 2 — Odin calls Kotlin (`show_toast`)
 
 ```
-odin: b.show_toast("hi")               (app/bridge.odin via libs:bridge foreign block)
-   └─ show_toast(const char*)          (build/gen/bridge_jni.c, generated up-call)
-        └─ OdinBridge.showToast("hi")  (OdinBridge.kt, generated wrapper)
+odin: b.show_toast("hi")               (app/bridge.odin via gen:bridge)
+   └─ show_toast(const char*)          (binding/android/generated/bridge_jni.c)
+        └─ OdinBridge.showToast("hi")  (generated Kotlin wrapper)
              └─ PlatformHandler.showToast → Toast on the UI thread
 ```
 
-iOS: `binding/ios/GameBridge.swift` generates the `@_cdecl("show_toast")`
-entry point, and `binding/ios/BridgePlatform.swift` installs the handler that
-shows a `UIAlertController`.
+iOS: `binding/ios/generated/GameBridge.swift` generates the
+`@_cdecl("show_toast")` entry point, and `binding/ios/BridgePlatform.swift`
+installs the handler that shows a `UIAlertController`.
 
 ## Where each artifact goes
 
 | Artifact | Path | Consumed by |
 |---|---|---|
-| C ABI header | `binding/api/bridge.h` | Swift bridging header, JNI glue, desktop stub |
-| Odin foreign block | `vendors/bridge/bridge.odin` | the app (`libs:bridge`) |
-| Kotlin bridge object | `binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt` | the Activity |
-| JNI glue | `build/gen/bridge_jni.c` (gitignored) | `libmain.so` link |
-| Swift bridge | `binding/ios/GameBridge.swift` | Xcode target |
+| C ABI header | `binding/generated/bridge.h` | Swift bridging header, JNI glue |
+| Odin foreign block | `binding/generated/bridge/bridge.odin` | the app (`gen:bridge`) |
+| Kotlin bridge object | `binding/android/generated/kotlin/dev/alfayez/odinsokol/OdinBridge.kt` | the Activity |
+| JNI glue | `binding/android/generated/bridge_jni.c` | `libmain.so` link |
+| Swift bridge | `binding/ios/generated/GameBridge.swift` | Xcode target |
 
-Platform bodies (the only hand-written non-Odin code):
+Hand-written files stay outside the generated folders:
 
-| Import | Android | iOS | Desktop |
-|---|---|---|---|
-| `show_toast` | `PlatformHandler.showToast` → Toast | `BridgePlatform.swift` UIAlertController | `binding/desktop/bridge.c` printf |
+| File | Role |
+|---|---|
+| `binding/android/java/.../OdinsokolActivity.java` | installs the Android `PlatformHandler` |
+| `binding/ios/BridgePlatform.swift` | installs the iOS `PlatformHandler` |
+| `binding/ios/Bridging.h` | imports the generated C header |
+| `binding/ios/entry.m` | SDL app callbacks |
+| `binding/ios/project.yaml` | XcodeGen spec |
+
+Platform bodies:
+
+| Import | Android | iOS |
+|---|---|---|
+| `show_toast` | `PlatformHandler.showToast` → Toast | `BridgePlatform.swift` → UIAlertController |
+
+Desktop currently has no bridge backend; `bridge_init()` is compiled out there.
 
 ## Lifecycle wiring (Android)
 
@@ -74,4 +87,5 @@ Platform bodies (the only hand-written non-Odin code):
   It also logs `OdinBridge.hello()` / `OdinBridge.add(2, 3)`.
 
 On the Odin side, `bridge_init()` in `app/bridge.odin` fires
-`show_toast("hello from odin")` during app init — proving direction 2.
+`show_toast("hello from odin")` on Android/iOS during app init — proving
+direction 2.

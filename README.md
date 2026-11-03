@@ -48,15 +48,14 @@ Generated and vendored:
 - `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
-- `vendors/bridge/bridge.odin` — generated import declarations
+- `binding/generated/bridge/bridge.odin` — generated import declarations (`gen:bridge`)
 - `shaders/samples/*.glsl` — shader sources; regenerate with `odin run . -- shaders`
 - `binding/spec/` — Odin binding contracts (`binding.odin`, `.android.odin`, `.ios.odin`)
-- `binding/api/bridge.h`, `binding/ios/GameBridge.swift`, `binding/android/.../OdinBridge.kt` — generated bridge files
+- `binding/generated/`, `binding/android/generated/`, `binding/ios/generated/` — generated bridge files
 - `tools/odinbinder/` — Odin-native bridge generator
 - `tools/androidgen/` — vendored Android Gradle project generator
 - `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
 
 The vendored sokol headers compile straight from the headers with impl defines,
 per platform, using whatever clang the host provides (desktop), the NDK
-(android), or Xcode (ios). The only other C is the small desktop import shim
-and the generated JNI glue.
+(android), or Xcode (ios). The only other C is the generated JNI glue.

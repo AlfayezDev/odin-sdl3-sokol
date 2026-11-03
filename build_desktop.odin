@@ -21,8 +21,8 @@ build_desktop :: proc(sample_id, smoke: i32) {
 		sokol_objects("build/desktop", "SOKOL_GLCORE", "clang")
 		linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -framework Cocoa -framework IOKit -framework Metal -framework CoreVideo -framework CoreAudio -framework CoreHaptics -framework GameController -framework CoreBluetooth -framework CoreMotion -framework AudioToolbox -framework QuartzCore -framework Foundation -ldl -lpthread -lm"
 		if !sh(fmt.tprintf(
-			"odin build app -collection:libs=vendors -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
-			smoke, sample_id, linker,
+			"odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
+			ODIN_COLLECTIONS, smoke, sample_id, linker,
 		)) {
 			fail("desktop build failed")
 		}
@@ -42,12 +42,10 @@ build_desktop :: proc(sample_id, smoke: i32) {
 	)) {
 		fail("SDL3 source build failed")
 	}
-	sh("clang -x c -c -O2 -Ibinding/api binding/desktop/bridge.c -o build/desktop/bridge.o")
-	sh("ar rcs build/desktop/libbridge.a build/desktop/bridge.o")
-	linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 -lbridge build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
+	linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
 	if !sh(fmt.tprintf(
-		"odin build app -collection:libs=vendors -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
-		smoke, sample_id, linker,
+		"odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
+		ODIN_COLLECTIONS, smoke, sample_id, linker,
 	)) {
 		fail("desktop build failed")
 	}

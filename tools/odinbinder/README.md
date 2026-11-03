@@ -42,17 +42,17 @@ attribute wins.
 odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
 build/tools/odinbinder generate --target all --spec binding/spec \
-  --header binding/api/bridge.h \
-  --odin vendors/bridge/bridge.odin \
-  --kotlin binding/android/java/dev/example/app/OdinBridge.kt \
-  --jni build/gen/bridge_jni.c \
-  --swift binding/ios/GameBridge.swift
+  --header binding/generated/bridge.h \
+  --odin binding/generated/bridge/bridge.odin \
+  --kotlin binding/android/generated/kotlin/dev/example/app/OdinBridge.kt \
+  --jni binding/android/generated/bridge_jni.c \
+  --swift binding/ios/generated/GameBridge.swift
 
 build/tools/odinbinder check --spec binding/spec
 ```
 
-`--target android|ios|desktop|all`. With `--target all`, the header and Odin
-declarations are the union of every target view, while each platform's
+`--target android|ios|all`. With `--target all`, the header and Odin
+declarations are the union of both target views, while each platform's
 Kotlin/Swift output comes from its own merged view.
 
 ## Types

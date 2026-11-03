@@ -13,7 +13,6 @@ Options :: struct {
 	kotlin: string,
 	jni:    string,
 	swift:  string,
-	stub:   string,
 	quiet:  bool,
 	check:  bool,
 }
@@ -22,9 +21,7 @@ usage :: proc() {
 	fmt.println("odinbinder - generate Odin <-> Android/iOS bindings from Odin proc declarations")
 	fmt.println()
 	fmt.println("usage:")
-	fmt.println(
-		"  odinbinder generate --target android|ios|desktop|all --spec <dir|file> [outputs]",
-	)
+	fmt.println("  odinbinder generate --target android|ios|all --spec <dir|file> [outputs]")
 	fmt.println("  odinbinder check --spec <dir|file>")
 	fmt.println()
 	fmt.println("outputs:")
@@ -33,7 +30,6 @@ usage :: proc() {
 	fmt.println("  --kotlin <path>   Android Kotlin bridge")
 	fmt.println("  --jni <path>      Android JNI glue")
 	fmt.println("  --swift <path>    iOS Swift bridge")
-	fmt.println("  --stub <path>     desktop C stubs")
 }
 
 main :: proc() {
@@ -93,8 +89,6 @@ parse_args :: proc(args: []string) -> Options {
 			opts.jni = next(args, &i, args[i])
 		case "--swift":
 			opts.swift = next(args, &i, args[i])
-		case "--stub":
-			opts.stub = next(args, &i, args[i])
 		case "-q", "--quiet":
 			opts.quiet = true
 		case "-h", "--help":
@@ -116,8 +110,6 @@ parse_target_name :: proc(name: string) -> (Target, bool) {
 		return .Android, true
 	case "ios":
 		return .Ios, true
-	case "desktop":
-		return .Desktop, true
 	}
 	return .Android, false
 }
@@ -167,7 +159,7 @@ fill_module_defaults :: proc(m: ^Module) {
 
 check_spec :: proc(opts: Options) -> string {
 	if strings.equal_fold(opts.target, "all") {
-		for t in ([]Target{.Android, .Ios, .Desktop}) {
+		for t in ([]Target{.Android, .Ios}) {
 			m, err := load_for_target(opts.spec, t)
 			if err != "" do return err
 			if verr := validate_module(m); verr != "" do return verr
@@ -186,7 +178,7 @@ generate :: proc(opts: Options) -> string {
 		// Header and Odin declarations cover every target; each platform's
 		// Kotlin/Swift view is emitted from its own merged contract.
 		merged: Module
-		for t in ([]Target{.Android, .Ios, .Desktop}) {
+		for t in ([]Target{.Android, .Ios}) {
 			module, err := load_for_target(opts.spec, t)
 			if err != "" do return err
 			if verr := validate_module(module); verr != "" do return verr
@@ -198,7 +190,7 @@ generate :: proc(opts: Options) -> string {
 		if opts.odin != "" {
 			if e := emit_odin(merged, opts.odin); e != "" do return e
 		}
-		for t in ([]Target{.Android, .Ios, .Desktop}) {
+		for t in ([]Target{.Android, .Ios}) {
 			module, err2 := load_for_target(opts.spec, t)
 			if err2 != "" do return err2
 			if e := emit_platform(module, t, opts); e != "" do return e
@@ -249,10 +241,6 @@ emit_platform :: proc(module: Module, target: Target, opts: Options) -> string {
 		if opts.swift != "" {
 			if e := emit_swift(module, opts.swift); e != "" do return e
 		}
-	case .Desktop:
-		if opts.stub != "" {
-			if e := emit_stub(module, opts.stub); e != "" do return e
-		}
 	}
 	if !opts.quiet {
 		if opts.header != "" do fmt.println("odinbinder: wrote", opts.header)
@@ -260,7 +248,6 @@ emit_platform :: proc(module: Module, target: Target, opts: Options) -> string {
 		if target == .Android && opts.kotlin != "" do fmt.println("odinbinder: wrote", opts.kotlin)
 		if target == .Android && opts.jni != "" do fmt.println("odinbinder: wrote", opts.jni)
 		if target == .Ios && opts.swift != "" do fmt.println("odinbinder: wrote", opts.swift)
-		if target == .Desktop && opts.stub != "" do fmt.println("odinbinder: wrote", opts.stub)
 	}
 	return ""
 }

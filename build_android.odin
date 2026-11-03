@@ -86,15 +86,16 @@ printf '%s' "$NDK" > build/android_ndk_path
 
 	// odin object
 	if !sh(fmt.tprintf(
-		"ODIN_ANDROID_NDK=%q ANDROID_NDK=%q odin build app -collection:libs=vendors -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -target:linux_arm64 -subtarget:android -minimum-os-version:29 -build-mode:obj -no-entry-point -out:%s/odin-app.o",
-		ndk, ndk, smoke, sample_id, out_dir,
+		"ODIN_ANDROID_NDK=%q ANDROID_NDK=%q odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -target:linux_arm64 -subtarget:android -minimum-os-version:29 -build-mode:obj -no-entry-point -out:%s/odin-app.o",
+		ndk, ndk, ODIN_COLLECTIONS, smoke, sample_id, out_dir,
 	)) {
 		fail("odin android object build failed")
 	}
 
 	// odinbinder: C header + Odin imports + Kotlin object + JNI glue
 	gen_bindings()
-	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/api build/gen/bridge_jni.c -o build/gen/bridge_jni.o", android_cc)) {
+	sh("mkdir -p build/gen")
+	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/generated %s -o build/gen/bridge_jni.o", android_cc, ANDROID_JNI)) {
 		fail("bridge_jni.c compile failed")
 	}
 

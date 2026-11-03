@@ -304,45 +304,12 @@ rewrite_paths :: proc(v: Value, prefix: string) -> Value {
 					m_set(&out, strings.clone(k), na)
 					continue
 				}
-			case "bindings":
-				m_set(&out, strings.clone(k), rewrite_binding_paths(vv, prefix))
-				continue
 			case "include":
 				m_set(&out, strings.clone(k), vv)
 				continue
 			}
 			m_set(&out, strings.clone(k), rewrite_paths(vv, prefix))
 		}
-		return out
-	case:
-		return v
-	}
-}
-
-rewrite_binding_paths :: proc(v: Value, prefix: string) -> Value {
-	#partial switch x in v {
-	case Map:
-		if m_has(x, "source") {
-			out := m_empty()
-			for k in x.keys {
-				vv := x.values[k]
-				switch k {
-				case "source", "header", "odin", "kotlin", "jni", "odinLib":
-					if sv, ok := vv.(string); ok {
-						m_set(&out, strings.clone(k), join_prefix(prefix, sv))
-						continue
-					}
-				}
-				m_set(&out, strings.clone(k), rewrite_paths(vv, prefix))
-			}
-			return out
-		}
-		out := m_empty()
-		for k in x.keys do m_set(&out, strings.clone(k), rewrite_binding_paths(x.values[k], prefix))
-		return out
-	case []Value:
-		out := make([]Value, len(x))
-		for item, i in x do out[i] = rewrite_binding_paths(item, prefix)
 		return out
 	case:
 		return v

@@ -5,7 +5,6 @@ import "core:strings"
 Target :: enum {
 	Android,
 	Ios,
-	Desktop,
 }
 
 Direction :: enum {
@@ -82,8 +81,6 @@ target_filename :: proc(dir: string, t: Target) -> string {
 		return join_path(dir, "binding.android.odin")
 	case .Ios:
 		return join_path(dir, "binding.ios.odin")
-	case .Desktop:
-		return join_path(dir, "binding.desktop.odin")
 	}
 	return ""
 }

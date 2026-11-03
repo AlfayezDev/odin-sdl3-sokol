@@ -23,6 +23,12 @@ ANDROIDGEN :: "build/tools/androidgen"
 ODINBINDER :: "build/tools/odinbinder"
 ANDROID_SPEC :: "binding/android/android.yaml"
 BINDING_SPEC :: "binding/spec"
+BRIDGE_HEADER :: "binding/generated/bridge.h"
+BRIDGE_ODIN :: "binding/generated/bridge/bridge.odin"
+ANDROID_KOTLIN :: "binding/android/generated/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"
+ANDROID_JNI :: "binding/android/generated/bridge_jni.c"
+IOS_SWIFT :: "binding/ios/generated/GameBridge.swift"
+ODIN_COLLECTIONS :: "-collection:libs=vendors -collection:gen=binding/generated"
 
 main :: proc() {
 	target := "desktop"
