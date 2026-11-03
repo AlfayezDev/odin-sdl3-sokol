@@ -31,31 +31,50 @@ parse_binding_file :: proc(path: string) -> (Module, string) {
 	for d in file.decls {
 		#partial switch v in d.derived_stmt {
 		case ^ast.Value_Decl:
-			attrs := binding_attrs(v.attributes)
-			is_config := false
-			for n in v.names {
-				#partial switch id in n.derived_expr {
-				case ^ast.Ident:
-					if id.name == "_config" do is_config = true
+			if err := parse_value_decl(v, &module, &found_config); err != "" {
+				return {}, fmt.tprintf("%s: %s", path, err)
+			}
+		case ^ast.Foreign_Block_Decl:
+			#partial switch body in v.body.derived_stmt {
+			case ^ast.Block_Stmt:
+				for stmt in body.stmts {
+					#partial switch vd in stmt.derived_stmt {
+					case ^ast.Value_Decl:
+						if err := parse_value_decl(vd, &module, &found_config); err != "" {
+							return {}, fmt.tprintf("%s: %s", path, err)
+						}
+					}
 				}
 			}
-			if is_config && !found_config {
-				found_config = true
-				if name, ok := attrs["name"]; ok && name != "" do module.name = name
-				if pkg_name, ok := attrs["android_package"]; ok && pkg_name != "" do module.android_pkg = pkg_name
-				if cls, ok := attrs["android_class"]; ok && cls != "" do module.android_class = cls
-				if mod, ok := attrs["ios_module"]; ok && mod != "" do module.ios_module = mod
-				continue
-			}
-			f, is_func, ferr := parse_function_decl(v, attrs)
-			if ferr != "" do return {}, fmt.tprintf("%s: %s", path, ferr)
-			if is_func do module.functions = append_func(module.functions, f)
 		}
 	}
 	if len(module.functions) == 0 && !found_config {
 		return {}, fmt.tprintf("%s: no proc c declarations found", path)
 	}
 	return module, ""
+}
+
+parse_value_decl :: proc(v: ^ast.Value_Decl, module: ^Module, found_config: ^bool) -> string {
+	attrs := binding_attrs(v.attributes)
+	is_config := false
+	for n in v.names {
+		#partial switch id in n.derived_expr {
+		case ^ast.Ident:
+			if id.name == "_config" do is_config = true
+		}
+	}
+	if is_config && !found_config^ {
+		found_config^ = true
+		if name, ok := attrs["name"]; ok && name != "" do module.name = name
+		if pkg_name, ok := attrs["android_package"]; ok && pkg_name != "" do module.android_pkg = pkg_name
+		if cls, ok := attrs["android_class"]; ok && cls != "" do module.android_class = cls
+		if mod, ok := attrs["ios_module"]; ok && mod != "" do module.ios_module = mod
+		return ""
+	}
+	f, is_func, ferr := parse_function_decl(v, attrs)
+	if ferr != "" do return ferr
+	if is_func do module.functions = append_func(module.functions, f)
+	return ""
 }
 
 binding_attrs :: proc(attributes: [dynamic]^ast.Attribute) -> map[string]string {
@@ -126,7 +145,10 @@ parse_function_decl :: proc(
 	} else if cc, ok := proc_type.calling_convention.(ast.Proc_Calling_Convention_Extra); ok {
 		is_c = cc == .Foreign_Block_Default
 	}
-	if !is_c do return {}, false, fmt.tprintf("%s must use proc c calling convention", name)
+	if !is_c {
+		if len(attrs) > 0 do return {}, false, fmt.tprintf("%s must use proc c calling convention", name)
+		return {}, false, ""
+	}
 
 	if dir, ok := attrs["direction"]; ok {
 		switch dir {

@@ -5,8 +5,8 @@ One first-party generator and two vendored tools.
 ## odinbinder
 
 Lives under `tools/odinbinder`. It parses the Odin binding contract in
-`binding/binding.odin` and generates the C header, Odin foreign declarations, Kotlin
-bridge, JNI glue, and Swift bridge.
+`app/bridge.odin` and generates the C header, Kotlin bridge, JNI glue, and
+Swift bridge.
 
 ```sh
 odin run builder -- bindings

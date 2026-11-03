@@ -33,12 +33,12 @@ shdc_path :: proc() -> string {
 	return "third_party/sokol-shdc/bin/sokol-shdc"
 }
 
-// regenerate the cross-platform binding artifacts from binding/binding.odin
+// regenerate the cross-platform binding artifacts from app/bridge.odin
 gen_bindings :: proc() {
 	ensure_tools()
 	if !sh(fmt.tprintf(
-		"%s generate --target all --spec %s --header %s --odin %s --kotlin %s --jni %s --swift %s --quiet",
-		ODINBINDER, BINDING_SPEC, BRIDGE_HEADER, BRIDGE_ODIN, ANDROID_KOTLIN, ANDROID_JNI, IOS_SWIFT,
+		"%s generate --target all --spec %s --header %s --kotlin %s --jni %s --swift %s --quiet",
+		ODINBINDER, BINDING_SPEC, BRIDGE_HEADER, ANDROID_KOTLIN, ANDROID_JNI, IOS_SWIFT,
 	)) {
 		fail("odinbinder failed")
 	}

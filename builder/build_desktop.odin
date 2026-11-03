@@ -23,7 +23,7 @@ build_desktop :: proc(sample_id, smoke: i32) {
 		linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -framework Cocoa -framework IOKit -framework Metal -framework CoreVideo -framework CoreAudio -framework CoreHaptics -framework GameController -framework CoreBluetooth -framework CoreMotion -framework AudioToolbox -framework QuartzCore -framework Foundation -ldl -lpthread -lm"
 		if !sh(fmt.tprintf(
 			"odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
-			ODIN_COLLECTIONS, smoke, sample_id, linker,
+			ODIN_APP_FLAGS, smoke, sample_id, linker,
 		)) {
 			fail("desktop build failed")
 		}
@@ -46,7 +46,7 @@ build_desktop :: proc(sample_id, smoke: i32) {
 	linker := "-Wl,--start-group -Lbuild/desktop -lSDL3 build/desktop/obj/sokol_gfx.o build/desktop/obj/sokol_gl.o build/desktop/obj/sokol_debugtext.o build/desktop/obj/sokol_shape.o -Wl,--end-group -lX11 -lXext -lGL -ldl -lpthread -lm"
 	if !sh(fmt.tprintf(
 		"odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -build-mode:exe -extra-linker-flags:\"%s\" -out:build/desktop/odin-sokol",
-		ODIN_COLLECTIONS, smoke, sample_id, linker,
+		ODIN_APP_FLAGS, smoke, sample_id, linker,
 	)) {
 		fail("desktop build failed")
 	}

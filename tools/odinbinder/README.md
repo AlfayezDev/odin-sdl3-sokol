@@ -1,8 +1,8 @@
 # odinbinder
 
 Odin-native binding generator. Parses binding contracts written as Odin
-declarations and emits the C ABI header, Odin foreign declarations, Kotlin
-bridge + JNI glue, and Swift bridge.
+declarations and emits the C ABI header, Kotlin bridge + JNI glue, and Swift
+bridge.
 
 No YAML schema, no separate IDL: the contract is Odin, parsed with
 `core:odin/parser`.
@@ -10,7 +10,7 @@ No YAML schema, no separate IDL: the contract is Odin, parsed with
 ## Contract layout
 
 ```text
-binding/binding.odin   # declarations + _config metadata
+app/bridge.odin   # declarations + implementations + _config metadata
 ```
 
 ```odin
@@ -22,11 +22,16 @@ binding/binding.odin   # declarations + _config metadata
 })
 _config :: struct {}
 
-@(odinbinder={direction="export"})          // Odin implements, platform calls
-hello :: proc "c" () -> cstring
+@(export)                                   // Odin implements, platform calls
+hello :: proc "c" () -> cstring {
+    return cstring("Hello from Odin")
+}
 
-@(odinbinder={direction="import", thread="ui"})  // platform implements, Odin calls
-show_toast :: proc "c" (msg: cstring)
+@(default_calling_convention="c")
+foreign {
+    @(odinbinder={direction="import", thread="ui"})  // platform implements, Odin calls
+    show_toast :: proc(msg: cstring) ---
+}
 ```
 
 A body infers `export`; no body infers `import`. The explicit `direction`
@@ -37,18 +42,17 @@ attribute wins.
 ```sh
 odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
-build/tools/odinbinder generate --target all --spec binding \
+build/tools/odinbinder generate --target all --spec app/bridge.odin \
   --header generated/shared/bridge.h \
-  --odin generated/shared/bridge/bridge.odin \
   --kotlin generated/android/kotlin/dev/example/app/OdinBridge.kt \
   --jni generated/android/bridge_jni.c \
   --swift generated/ios/GameBridge.swift
 
-build/tools/odinbinder check --spec binding
+build/tools/odinbinder check --spec app/bridge.odin
 ```
 
-`--target android|ios|all`. One contract feeds the header, Odin declarations,
-Kotlin/JNI, and Swift; `--target all` writes every output. In this repo the
+`--target android|ios|all`. One contract feeds the header, Kotlin/JNI, and
+Swift; `--target all` writes every output. In this repo the
 outputs are ignored and recreated by `odin run builder -- bindings`.
 
 ## Types

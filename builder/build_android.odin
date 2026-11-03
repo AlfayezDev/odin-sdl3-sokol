@@ -67,7 +67,7 @@ printf '%s' "$NDK" > build/android_ndk_path
 	// odin object
 	if !sh(fmt.tprintf(
 		"ODIN_ANDROID_NDK=%q ANDROID_NDK=%q odin build app %s -define:SMOKE_FRAMES=%d -define:SAMPLE_ID=%d -o:speed -target:linux_arm64 -subtarget:android -minimum-os-version:29 -build-mode:obj -no-entry-point -out:%s/odin-app.o",
-		ndk, ndk, ODIN_COLLECTIONS, smoke, sample_id, out_dir,
+		ndk, ndk, ODIN_APP_FLAGS, smoke, sample_id, out_dir,
 	)) {
 		fail("odin android object build failed")
 	}

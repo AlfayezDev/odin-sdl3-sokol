@@ -8,7 +8,6 @@ Options :: struct {
 	target: string,
 	spec:   string,
 	header: string,
-	odin:   string,
 	kotlin: string,
 	jni:    string,
 	swift:  string,
@@ -25,7 +24,6 @@ usage :: proc() {
 	fmt.println()
 	fmt.println("outputs:")
 	fmt.println("  --header <path>   C ABI header")
-	fmt.println("  --odin <path>     generated Odin foreign declarations")
 	fmt.println("  --kotlin <path>   Android Kotlin bridge")
 	fmt.println("  --jni <path>      Android JNI glue")
 	fmt.println("  --swift <path>    iOS Swift bridge")
@@ -80,8 +78,6 @@ parse_args :: proc(args: []string) -> Options {
 			opts.spec = next(args, &i, args[i])
 		case "--header":
 			opts.header = next(args, &i, args[i])
-		case "--odin":
-			opts.odin = next(args, &i, args[i])
 		case "--kotlin":
 			opts.kotlin = next(args, &i, args[i])
 		case "--jni":
@@ -155,9 +151,6 @@ generate :: proc(opts: Options) -> string {
 	if opts.header != "" {
 		if e := emit_header(module, opts.header); e != "" do return e
 	}
-	if opts.odin != "" {
-		if e := emit_odin(module, opts.odin); e != "" do return e
-	}
 
 	if strings.equal_fold(opts.target, "all") {
 		for t in ([]Target{.Android, .Ios}) {
@@ -203,7 +196,6 @@ emit_platform :: proc(module: Module, target: Target, opts: Options) -> string {
 	}
 	if !opts.quiet {
 		if opts.header != "" do fmt.println("odinbinder: wrote", opts.header)
-		if opts.odin != "" do fmt.println("odinbinder: wrote", opts.odin)
 		if target == .Android && opts.kotlin != "" do fmt.println("odinbinder: wrote", opts.kotlin)
 		if target == .Android && opts.jni != "" do fmt.println("odinbinder: wrote", opts.jni)
 		if target == .Ios && opts.swift != "" do fmt.println("odinbinder: wrote", opts.swift)

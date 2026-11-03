@@ -53,7 +53,7 @@ Generated and vendored:
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
 - `shaders/samples/*.glsl` — shader sources; regenerate with `odin run builder -- shaders`
 - `binding/README.md` — how to write a binding on each platform
-- `binding/binding.odin` — the shared binding contract
+- `app/bridge.odin` — the binding contract and Odin implementation
 - `generated/` — generated on demand and ignored by git
 - `tools/odinbinder/` — Odin-native bridge generator
 - `third_party/androidgen/` — vendored Android Gradle project generator

@@ -1,16 +1,30 @@
 package app
 
-// The API contract lives in binding/binding.odin (see binding/README.md).
-// Implement exports from that contract here as `proc "c"` functions.
-// Imports are generated into gen:bridge (import it as `b` and call them).
+// This file is both the bridge contract and the Odin implementation.
+// Exports have real bodies. Imports are `foreign` declarations.
+// OdinBinder parses this file to generate the platform bridge code.
 
-import b "gen:bridge"
+@(odinbinder={
+    name = "bridge",
+    android_package = "dev.alfayez.odinsokol",
+    android_class = "OdinBridge",
+    ios_module = "OdinBridge",
+})
+_config :: struct {}
 
-// ---- exports: odin -> kotlin/swift ----
+// ---- exports: odin -> platform ----
 
 @(export)
 hello :: proc "c" () -> cstring {
 	return cstring("Hello from Odin")
+}
+
+// ---- imports: platform -> odin ----
+
+@(default_calling_convention="c")
+foreign {
+	@(odinbinder={direction="import", thread="ui"})
+	show_toast :: proc(msg: cstring) ---
 }
 
 // ---- glue ----
@@ -18,6 +32,6 @@ hello :: proc "c" () -> cstring {
 // call once during app init: proves the odin -> platform direction
 bridge_init :: proc() {
 	when (ODIN_OS == .Linux && ODIN_PLATFORM_SUBTARGET == .Android) || ODIN_PLATFORM_SUBTARGET_IOS {
-		b.show_toast("hello from odin")
+		show_toast("hello from odin")
 	}
 }

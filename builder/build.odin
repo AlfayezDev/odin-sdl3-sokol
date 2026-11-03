@@ -22,13 +22,12 @@ foreign {
 ANDROIDGEN :: "build/tools/androidgen"
 ODINBINDER :: "build/tools/odinbinder"
 ANDROID_SPEC :: "binding/android/android.yaml"
-BINDING_SPEC :: "binding"
+BINDING_SPEC :: "app/bridge.odin"
 BRIDGE_HEADER :: "generated/shared/bridge.h"
-BRIDGE_ODIN :: "generated/shared/bridge/bridge.odin"
 ANDROID_KOTLIN :: "generated/android/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"
 ANDROID_JNI :: "generated/android/bridge_jni.c"
 IOS_SWIFT :: "generated/ios/GameBridge.swift"
-ODIN_COLLECTIONS :: "-collection:libs=vendors -collection:gen=generated/shared"
+ODIN_APP_FLAGS :: "-collection:libs=vendors -custom-attribute:odinbinder"
 
 main :: proc() {
 	target := "desktop"

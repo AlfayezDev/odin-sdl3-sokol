@@ -7,24 +7,9 @@ are ignored by git and recreated by:
 odin run builder -- bindings
 ```
 
-## 1. The contract
+## 1. The bridge file
 
-Declare the API in `binding/binding.odin`:
-
-```odin
-@(odinbinder={direction="export"})
-hello :: proc "c" () -> cstring
-
-@(odinbinder={direction="import", thread="ui"})
-show_toast :: proc "c" (msg: cstring)
-```
-
-- `export` — Odin implements it, the platform calls it.
-- `import` — the platform implements it, Odin calls it.
-- `thread="ui"` — the generated wrapper dispatches to the main/UI thread, so
-  platform handlers can be plain functions.
-
-The `_config` record sets the generated names:
+The contract and the Odin implementation live in `app/bridge.odin`:
 
 ```odin
 @(odinbinder={
@@ -34,20 +19,44 @@ The `_config` record sets the generated names:
     ios_module = "OdinBridge",
 })
 _config :: struct {}
-```
 
-## 2. Odin implementation
-
-Exports are ordinary `proc "c"` functions in `app/bridge.odin`:
-
-```odin
+// export: Odin implements it, the platform calls it
 @(export)
 hello :: proc "c" () -> cstring {
     return cstring("Hello from Odin")
 }
+
+// import: the platform implements it, Odin calls it
+@(default_calling_convention="c")
+foreign {
+    @(odinbinder={direction="import", thread="ui"})
+    show_toast :: proc(msg: cstring) ---
+}
 ```
 
-Imports are callable through the generated `gen:bridge` package.
+- `export` — a real `proc "c"` with a body.
+- `import` — a `foreign` declaration.
+- `thread="ui"` — the generated wrapper dispatches to the main/UI thread.
+
+Because the file contains odinbinder attributes, every app build passes:
+
+```sh
+-custom-attribute:odinbinder
+```
+
+## 2. Calling imports
+
+Imports are called directly:
+
+```odin
+bridge_init :: proc() {
+    when mobile {
+        show_toast("hello from odin")
+    }
+}
+```
+
+No generated Odin package and no import alias.
 
 ## 3. Android host
 
@@ -82,7 +91,7 @@ public func odinbinder_ios_install() {
 ## Generated output
 
 ```text
-generated/shared/                   shared C header + Odin imports
+generated/shared/bridge.h           shared C ABI header
 generated/android/                  Kotlin bridge + JNI glue
 generated/ios/                      Swift bridge
 ```
