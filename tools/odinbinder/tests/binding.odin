@@ -29,6 +29,12 @@ pick_color :: proc "c" (current: Color) -> Color
 @(odinbinder={direction="import", thread="ui"})
 show_message :: proc "c" (msg: Nullable_CString)
 
+@(odinbinder={direction="import"})
+object :: proc "c" ()
+
+@(odinbinder={direction="export"})
+default :: proc "c" ()
+
 @(odinbinder={direction="export"})
 set_color :: proc "c" (color: Color)
 

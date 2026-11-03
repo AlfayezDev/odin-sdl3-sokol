@@ -165,7 +165,12 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 			line(
 				&b,
 				2,
-				fmt.tprintf("fun %s(%s)%s", camel(f.name), strings.join(params[:], ", "), ret),
+				fmt.tprintf(
+					"fun %s(%s)%s",
+					kotlin_ident(camel(f.name)),
+					strings.join(params[:], ", "),
+					ret,
+				),
 			)
 		}
 		line(&b, 1, "}")
@@ -201,7 +206,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				1,
 				fmt.tprintf(
 					"@JvmStatic private external fun %s(%s)%s",
-					native_name,
+					kotlin_ident(native_name),
 					strings.join(params[:], ", "),
 					ret_typ,
 				),
@@ -229,7 +234,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				1,
 				fmt.tprintf(
 					"@JvmStatic fun %s(%s)%s %s",
-					camel(f.name),
+					kotlin_ident(camel(f.name)),
 					strings.join(public_params[:], ", "),
 					public_ret,
 					"{",
@@ -250,7 +255,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				1,
 				fmt.tprintf(
 					"@JvmStatic external fun %s(%s)%s",
-					camel(f.name),
+					kotlin_ident(camel(f.name)),
 					strings.join(params[:], ", "),
 					ret_typ,
 				),
@@ -278,7 +283,7 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 			1,
 			fmt.tprintf(
 				"@JvmStatic fun %s(%s)%s %s",
-				camel(f.name),
+				kotlin_ident(camel(f.name)),
 				strings.join(params[:], ", "),
 				ret_typ,
 				"{",
@@ -621,7 +626,12 @@ emit_swift :: proc(module: Module, path: string) -> string {
 		line(
 			&b,
 			2,
-			fmt.tprintf("func %s(%s)%s", camel(f.name), strings.join(params[:], ", "), ret),
+			fmt.tprintf(
+				"func %s(%s)%s",
+				swift_ident(camel(f.name)),
+				strings.join(params[:], ", "),
+				ret,
+			),
 		)
 	}
 	line(&b, 1, "}")
@@ -660,7 +670,7 @@ emit_swift :: proc(module: Module, path: string) -> string {
 			1,
 			fmt.tprintf(
 				"public static func %s(%s)%s %s",
-				camel(f.name),
+				swift_ident(camel(f.name)),
 				strings.join(params[:], ", "),
 				ret,
 				"{",
@@ -762,7 +772,7 @@ emit_swift :: proc(module: Module, path: string) -> string {
 		call := fmt.tprintf(
 			"%s.platform?.%s(%s)",
 			module.ios_module,
-			camel(f.name),
+			swift_ident(camel(f.name)),
 			strings.join(call_args[:], ", "),
 		)
 		if f.ret == "" {

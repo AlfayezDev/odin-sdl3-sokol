@@ -119,7 +119,7 @@ foreign {
 ```
 
 Enums map to `enum class Color` in Kotlin and `enum Color: Int32`/`UInt32` in Swift.
-Kotlin/Swift keyword field names are escaped; Swift case collisions are rejected.
+Kotlin/Swift keyword identifiers are escaped; Swift case collisions are rejected.
 Unsigned C types use the signed JVM type of the same width in Kotlin
 (`u32` → `Int`), keeping the C/JNI bits unchanged.
 
