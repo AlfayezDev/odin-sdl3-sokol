@@ -39,14 +39,3 @@ targets:
         versionName: "1.0"
     android:
       abiFilters: [arm64-v8a, x86_64]
-
-bindings:
-  - name: bridge
-    sourceLanguage: odin
-    source: ../../app/bridge.odin
-    header: ../../binding/api/bridge.h
-    odin: ../../vendors/bridge/bridge.odin
-    kotlin: ../../binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt
-    jni: ../../build/gen/bridge_jni.c
-    package: dev.alfayez.odinsokol
-    class: OdinBridge

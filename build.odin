@@ -2,9 +2,9 @@ package odin_sokol_build
 
 // Unified build orchestrator. Usage:
 //   odin run . --            (desktop, default)
-//   odin run . -- tools      (build androidgen, verify sokol-shdc)
+//   odin run . -- tools      (build odinbinder + androidgen, verify sokol-shdc)
 //   odin run . -- shaders    (sokol-shdc -> vendors/shaders)
-//   odin run . -- bindings   (androidgen -> C/Odin/Kotlin/JNI bridge)
+//   odin run . -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
 //   odin run . -- desktop
 //   odin run . -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
 //   odin run . -- ios        (macOS only: xcodegen + xcodebuild simulator build)
@@ -20,7 +20,9 @@ foreign {
 }
 
 ANDROIDGEN :: "build/tools/androidgen"
+ODINBINDER :: "build/tools/odinbinder"
 ANDROID_SPEC :: "binding/android/android.yaml"
+BINDING_SPEC :: "binding/spec"
 
 main :: proc() {
 	target := "desktop"
@@ -45,23 +47,23 @@ main :: proc() {
 		run_shaders()
 	case "bindings":
 		gen_bindings()
-	case "bridge":
-		// backward-compatible alias
-		gen_bindings()
 	case "tools":
 		ensure_tools()
 	case:
 		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bindings|bridge|tools]")
+		fmt.eprintln("usage: odin run . -- [desktop|android|ios|shaders|bindings|tools]")
 		os.exit(1)
 	}
 }
 
-// build/verify the two external tools used by this repo
+// build/verify the external tools used by this repo
 ensure_tools :: proc() {
 	sh("mkdir -p build/tools")
 	if !sh(fmt.tprintf("odin build tools/androidgen/src -o:speed -out:%s", ANDROIDGEN)) {
 		fail("androidgen build failed")
+	}
+	if !sh(fmt.tprintf("odin build tools/odinbinder/src -o:speed -out:%s", ODINBINDER)) {
+		fail("odinbinder build failed")
 	}
 	shdc := shdc_path()
 	if !sh(fmt.tprintf("test -x %q", shdc)) {
@@ -84,13 +86,16 @@ shdc_path :: proc() -> string {
 	return "tools/sokol-shdc/bin/sokol-shdc"
 }
 
-// regenerate bridge/C/Odin/Kotlin artifacts via the generic androidgen tool
+// regenerate the cross-platform binding artifacts from binding/spec/*.odin
 gen_bindings :: proc() {
 	ensure_tools()
-	if !sh(fmt.tprintf("%s bindings --spec %s", ANDROIDGEN, ANDROID_SPEC)) {
-		fail("androidgen bindings failed")
+	if !sh(fmt.tprintf(
+		"%s generate --target all --spec %s --header binding/api/bridge.h --odin vendors/bridge/bridge.odin --kotlin binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt --jni build/gen/bridge_jni.c --swift binding/ios/GameBridge.swift --quiet",
+		ODINBINDER, BINDING_SPEC,
+	)) {
+		fail("odinbinder failed")
 	}
-	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, bridge_jni.c")
+	fmt.println("bindings regenerated: bridge.h, bridge.odin, OdinBridge.kt, GameBridge.swift, bridge_jni.c")
 }
 
 // ------------------------------------------------------------ helpers
@@ -570,7 +575,7 @@ printf '%s' "$NDK" > build/android_ndk_path
 		fail("odin android object build failed")
 	}
 
-	// androidgen: C header + Odin imports + Kotlin object + JNI glue
+	// odinbinder: C header + Odin imports + Kotlin object + JNI glue
 	gen_bindings()
 	if !sh(fmt.tprintf("%s -x c -c -O2 -Ibinding/api build/gen/bridge_jni.c -o build/gen/bridge_jni.o", android_cc)) {
 		fail("bridge_jni.c compile failed")
@@ -616,6 +621,7 @@ build_ios :: proc(sample_id, smoke: i32) {
 	when ODIN_OS != .Darwin {
 		fail("ios builds require macOS")
 	}
+	gen_bindings()
 	// generated ObjC trampoline: SDL callbacks forwarded to the Odin app
 	sh("mkdir -p build/ios")
 	if !sh("xcodegen generate --spec binding/ios/project.yaml --project build/ios") {

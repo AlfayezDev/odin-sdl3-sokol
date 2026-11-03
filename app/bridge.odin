@@ -1,15 +1,9 @@
 package app
 
-// BINDINGS: every `proc "c"` declaration in this file is part of the
-// cross-language API (androidgen bindings reads it — see BINDINGS.md):
-//
-//   with body    -> implemented here in Odin; consumed by Kotlin/Swift
-//   without body -> implemented by the platform; callable from Odin
-//
-// The callable platform half is generated into libs:bridge (import it as
-// `b` and call the proc directly).
+// BINDINGS: the API contract lives in binding/spec/*.odin (see BINDINGS.md).
+// Implement exports from that contract here as `proc "c"` functions.
+// Imports are generated into libs:bridge (import it as `b` and call them).
 
-import "core:c"
 import b "libs:bridge"
 
 // ---- exports: odin -> kotlin/swift ----
@@ -23,10 +17,6 @@ hello :: proc "c" () -> cstring {
 add :: proc "c" (a, b: i32) -> i32 {
 	return a + b
 }
-
-// ---- imports: platform -> odin ----
-
-show_toast :: proc "c" (msg: cstring)
 
 // ---- glue ----
 

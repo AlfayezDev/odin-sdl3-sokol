@@ -6,9 +6,9 @@ All build/run logic lives in `build.odin` — run it with odin itself.
 ## Build & run
 
 ```sh
-odin run . -- tools      # build androidgen, verify sokol-shdc
+odin run . -- tools      # build odinbinder + androidgen, verify sokol-shdc
 odin run . -- shaders    # sokol-shdc -> vendors/shaders
-odin run . -- bindings   # androidgen -> C header, Odin, Kotlin, JNI glue
+odin run . -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
 
 odin run . -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
 odin run . -- android    # bindings + NDK build + gradle APK + adb install/launch
@@ -31,9 +31,12 @@ odin run . -- ios        # xcodegen + xcodebuild simulator app (macOS)
 - `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
 - `shaders/samples/*.glsl` — shader sources; regenerate bindings with
   `odin run . -- shaders` after editing
-- `tools/androidgen/` — vendored Android project/bindings generator
+- `binding/spec/` — Odin binding contracts (`binding.odin`, `.android.odin`, `.ios.odin`)
+- `tools/odinbinder/` — Odin-native bridge generator (C/Odin/Kotlin/JNI/Swift)
+- `tools/androidgen/` — vendored Android Gradle project generator
 - `tools/sokol-shdc/` — pinned shader compiler binaries + fetch script
 
-The vendored sokol headers are the only C in the build: compiled straight
-from the headers with impl defines, per platform, by whatever clang the
-host provides (desktop), the NDK (android), or Xcode (ios).
+The vendored sokol headers compile straight from the headers with impl defines,
+per platform, using whatever clang the host provides (desktop), the NDK
+(android), or Xcode (ios). The only other C is the small desktop import shim
+and the generated JNI glue.

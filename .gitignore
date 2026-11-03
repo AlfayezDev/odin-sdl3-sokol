@@ -9,3 +9,4 @@ android/.idea/
 android/app/src/main/jniLibs/
 /android/
 /build/
+/odin-sokol

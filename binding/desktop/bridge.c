@@ -1,6 +1,5 @@
-// Desktop implementation of binding/api/bridge.h (platform -> odin half:
-// the platform_* functions). iOS uses binding/ios/bridge.m, Android uses
-// generated JNI glue.
+// Desktop implementation of the import half of binding/api/bridge.h.
+// iOS uses binding/ios/BridgePlatform.swift, Android uses generated JNI glue.
 #include <stdio.h>
 #include "bridge.h"
 

@@ -5,16 +5,22 @@ Authoritative reference: [`BINDINGS.md`](../../BINDINGS.md).
 
 ## The contract file
 
-`app/bridge.odin` is both the API spec and the Odin implementation:
+`binding/spec/binding.odin` declares the API; it is parsed by odinbinder and is
+not compiled into the app:
 
 ```odin
-@(export)
-hello :: proc "c" () -> cstring { ... }   // body → Odin implements it
+@(odinbinder={direction="export"})
+hello :: proc "c" () -> cstring   // Odin implements, platform calls
 
-show_toast :: proc "c" (msg: cstring)     // no body → the platform implements it
+@(odinbinder={direction="import"})
+show_toast :: proc "c" (msg: cstring)   // platform implements, Odin calls
 ```
 
-Everything below is derived from that file by `odin run . -- bindings`.
+`binding/spec/binding.android.odin` and `binding/spec/binding.ios.odin` merge
+over the shared file by name. Today both only override `show_toast` with the
+right `thread` metadata.
+
+Everything below is derived from those files by `odin run . -- bindings`.
 
 ## Direction 1 — Kotlin calls Odin (`hello`)
 
@@ -24,9 +30,8 @@ android: OdinBridge.hello()                        (OdinBridge.kt, generated ext
         └─ hello()                                 (app/bridge.odin, your Odin code)
 ```
 
-iOS does the same without JNI: Swift calls `odin_hello` — the C symbol
-from the generated `binding/api/bridge.h`, imported through
-`binding/ios/Bridging.h`.
+iOS does the same without JNI: Swift calls the C symbol through
+`@_silgen_name("hello")` inside the generated `binding/ios/GameBridge.swift`.
 
 ## Direction 2 — Odin calls Kotlin (`show_toast`)
 
@@ -37,8 +42,9 @@ odin: b.show_toast("hi")               (app/bridge.odin via libs:bridge foreign 
              └─ PlatformHandler.showToast → Toast on the UI thread
 ```
 
-iOS: `binding/ios/bridge.swift` implements the same C symbol with
-`@_cdecl` and shows a UIAlertController.
+iOS: `binding/ios/GameBridge.swift` generates the `@_cdecl("show_toast")`
+entry point, and `binding/ios/BridgePlatform.swift` installs the handler that
+shows a `UIAlertController`.
 
 ## Where each artifact goes
 
@@ -48,12 +54,13 @@ iOS: `binding/ios/bridge.swift` implements the same C symbol with
 | Odin foreign block | `vendors/bridge/bridge.odin` | the app (`libs:bridge`) |
 | Kotlin bridge object | `binding/android/java/dev/alfayez/odinsokol/OdinBridge.kt` | the Activity |
 | JNI glue | `build/gen/bridge_jni.c` (gitignored) | `libmain.so` link |
+| Swift bridge | `binding/ios/GameBridge.swift` | Xcode target |
 
 Platform bodies (the only hand-written non-Odin code):
 
 | Import | Android | iOS | Desktop |
 |---|---|---|---|
-| `show_toast` | `PlatformHandler.showToast` → Toast | `bridge.swift` UIAlertController | `binding/desktop/bridge.c` printf |
+| `show_toast` | `PlatformHandler.showToast` → Toast | `BridgePlatform.swift` UIAlertController | `binding/desktop/bridge.c` printf |
 
 ## Lifecycle wiring (Android)
 
