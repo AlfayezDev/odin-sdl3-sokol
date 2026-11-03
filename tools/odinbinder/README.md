@@ -59,12 +59,15 @@ outputs are ignored and recreated by `odin run builder -- bindings`.
 
 `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`
 
-Records, enums, arrays, objects, callbacks, async, and `b32` are not supported
-yet.
+Enums with an `i32` or `u32` base are supported, and `Nullable_CString`
+(alias of `cstring`) maps to optional strings. Nullable strings are currently
+limited to import parameters.
+
+Records, arrays, objects, callbacks, async, and `b32` are not supported yet.
 
 ## Rules
 
 - Declarations use `proc "c"`.
-- Imports cannot return `cstring`.
-- Binding contract files are parsed, not compiled app code. If a tool compiles
-  one, pass `-custom-attribute:odinbinder`.
+- Imports cannot return `cstring` or `Nullable_CString`.
+- The contract lives in `app/bridge.odin` and is compiled with the app, so app
+  builds pass `-custom-attribute:odinbinder`.

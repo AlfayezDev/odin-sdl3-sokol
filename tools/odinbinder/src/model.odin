@@ -1,5 +1,6 @@
 package odinbinder
 
+import "core:fmt"
 import "core:strings"
 
 Target :: enum {
@@ -40,12 +41,31 @@ Function :: struct {
 	ret:       string,
 }
 
+Enum_Field :: struct {
+	name:  string,
+	value: i64,
+}
+
+Enum :: struct {
+	name:       string,
+	underlying: string,
+	fields:     []Enum_Field,
+}
+
 Module :: struct {
 	name:          string,
 	android_pkg:   string,
 	android_class: string,
 	ios_module:    string,
 	functions:     []Function,
+	enums:         []Enum,
+}
+
+append_enum :: proc(arr: []Enum, e: Enum) -> []Enum {
+	out := make([]Enum, len(arr) + 1)
+	copy(out[:len(arr)], arr)
+	out[len(arr)] = e
+	return out
 }
 
 append_func :: proc(arr: []Function, f: Function) -> []Function {
@@ -55,34 +75,79 @@ append_func :: proc(arr: []Function, f: Function) -> []Function {
 	return out
 }
 
-primitive_name :: proc(p: Primitive) -> string {
-	switch p {
-	case .I8:
-		return "i8"
-	case .I16:
-		return "i16"
-	case .I32:
-		return "i32"
-	case .I64:
-		return "i64"
-	case .U8:
-		return "u8"
-	case .U16:
-		return "u16"
-	case .U32:
-		return "u32"
-	case .U64:
-		return "u64"
-	case .F32:
-		return "f32"
-	case .F64:
-		return "f64"
-	case .Bool:
-		return "bool"
-	case .CString:
-		return "cstring"
+is_nullable_cstring :: proc(name: string) -> bool {
+	return name == "Nullable_CString"
+}
+
+find_enum :: proc(module: Module, name: string) -> (Enum, bool) {
+	for e in module.enums {
+		if e.name == name do return e, true
 	}
-	return ""
+	return {}, false
+}
+
+enum_underlying :: proc(module: Module, name: string) -> (string, bool) {
+	if e, ok := find_enum(module, name); ok do return e.underlying, true
+	return "", false
+}
+
+enum_first_field :: proc(e: Enum) -> string {
+	if len(e.fields) == 0 do return "0"
+	return e.fields[0].name
+}
+
+c_type_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "const char *"
+	if u, ok := enum_underlying(module, name); ok do return c_type(u)
+	return c_type(name)
+}
+
+kotlin_type_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "String?"
+	if _, ok := find_enum(module, name); ok do return name
+	return kotlin_type(name)
+}
+
+swift_type_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "String?"
+	if _, ok := find_enum(module, name); ok do return name
+	return swift_type(name)
+}
+
+jni_type_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "jstring"
+	if u, ok := enum_underlying(module, name); ok do return jni_type(u)
+	return jni_type(name)
+}
+
+jni_sig_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "Ljava/lang/String;"
+	if u, ok := enum_underlying(module, name); ok do return jni_sig(u)
+	return jni_sig(name)
+}
+
+jni_call_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "CallStaticObjectMethod"
+	if u, ok := enum_underlying(module, name); ok do return jni_call(u)
+	return jni_call(name)
+}
+
+swift_c_type_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "UnsafePointer<CChar>?"
+	if u, ok := enum_underlying(module, name); ok do return swift_c_type(u)
+	return swift_c_type(name)
+}
+
+kotlin_default_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "null"
+	if e, ok := find_enum(module, name); ok do return fmt.tprintf("%s.%s", e.name, enum_first_field(e))
+	return kotlin_default(name)
+}
+
+swift_default_for :: proc(module: Module, name: string) -> string {
+	if is_nullable_cstring(name) do return "nil"
+	if e, ok := find_enum(module, name); ok do return fmt.tprintf(".%s", swift_case(enum_first_field(e)))
+	return swift_default(name)
 }
 
 parse_primitive :: proc(name: string) -> (Primitive, bool) {
@@ -160,13 +225,13 @@ kotlin_type :: proc(name: string) -> string {
 	case .I64:
 		return "Long"
 	case .U8:
-		return "UByte"
+		return "Byte"
 	case .U16:
-		return "UShort"
+		return "Short"
 	case .U32:
-		return "UInt"
+		return "Int"
 	case .U64:
-		return "ULong"
+		return "Long"
 	case .F32:
 		return "Float"
 	case .F64:
@@ -300,6 +365,59 @@ jni_call :: proc(name: string) -> string {
 		return "CallStaticObjectMethod"
 	}
 	return "CallStaticVoidMethod"
+}
+
+kotlin_enum_literal :: proc(underlying: string, value: i64) -> string {
+	switch underlying {
+	case "i64":
+		return fmt.tprintf("%dL", value)
+	case "u32":
+		v := value
+		if v > 0x7fffffff do v -= 0x100000000
+		return fmt.tprintf("%d", v)
+	case "u8", "u16", "u64":
+		return fmt.tprintf("%d", value)
+	case:
+		return fmt.tprintf("%d", value)
+	}
+}
+
+function_uses_enum :: proc(module: Module, f: Function) -> bool {
+	for p in f.params {
+		if _, ok := find_enum(module, p.typ); ok do return true
+	}
+	if _, ok := find_enum(module, f.ret); ok do return true
+	return false
+}
+
+kotlin_export_name :: proc(module: Module, f: Function) -> string {
+	if function_uses_enum(module, f) do return fmt.tprintf("native%s", pascal(f.name))
+	return camel(f.name)
+}
+
+jni_return_default_for :: proc(module: Module, name: string) -> string {
+	if u, ok := enum_underlying(module, name); ok do return jni_return_default(u)
+	return jni_return_default(name)
+}
+
+swift_raw_fallback :: proc(module: Module, name: string) -> string {
+	if u, ok := enum_underlying(module, name); ok do return swift_default(u)
+	return swift_default(name)
+}
+
+lower_first :: proc(s: string) -> string {
+	if len(s) == 0 do return s
+	b := strings.Builder{}
+	strings.builder_init(&b)
+	c := s[0]
+	if c >= 'A' && c <= 'Z' do c += 'a' - 'A'
+	strings.write_byte(&b, c)
+	strings.write_string(&b, s[1:])
+	return strings.to_string(b)
+}
+
+swift_case :: proc(s: string) -> string {
+	return lower_first(camel(s))
 }
 
 camel :: proc(s: string) -> string {

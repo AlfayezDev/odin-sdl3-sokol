@@ -166,7 +166,7 @@ generate :: proc(opts: Options) -> string {
 
 validate_module :: proc(module: Module) -> string {
 	for f, i in module.functions {
-		if f.direction == .Import && f.ret == "cstring" {
+		if f.direction == .Import && (f.ret == "cstring" || is_nullable_cstring(f.ret)) {
 			return fmt.tprintf("%s: import %s cannot return cstring", module.name, f.name)
 		}
 		for g, j in module.functions {

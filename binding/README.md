@@ -96,5 +96,48 @@ generated/android/                  Kotlin bridge + JNI glue
 generated/ios/                      Swift bridge
 ```
 
-Supported types: `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`.
-Records, enums, arrays, objects, callbacks, async, and `b32` are not supported.
+Supported types:
+
+- `i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 bool cstring`
+- enums with an `i32` or `u32` base
+- `Nullable_CString :: cstring` for optional strings
+
+Example enum:
+
+```odin
+Color :: enum i32 {
+    Red,
+    Green,
+    Blue,
+}
+
+@(default_calling_convention="c")
+foreign {
+    @(odinbinder={direction="import", thread="ui"})
+    set_color :: proc(color: Color) ---
+}
+```
+
+Enums map to `enum class Color` in Kotlin and `enum Color: Int32`/`UInt32` in Swift.
+Unsigned C types use the signed JVM type of the same width in Kotlin
+(`u32` → `Int`), keeping the C/JNI bits unchanged.
+
+Optional strings use the transparent alias:
+
+```odin
+Nullable_CString :: cstring
+```
+
+and are only supported on **import parameters**:
+
+```odin
+@(default_calling_convention="c")
+foreign {
+    @(odinbinder={direction="import", thread="ui"})
+    show_message :: proc(msg: Nullable_CString) ---
+}
+```
+
+They map to `String?` in Kotlin and Swift. Nullable returns and nullable export parameters are not supported yet.
+
+Records, arrays, objects, callbacks, async, and `b32` are not supported.

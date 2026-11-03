@@ -27,6 +27,14 @@ parse_binding_file :: proc(path: string) -> (Module, string) {
 	}
 
 	module := Module{}
+	for d in file.decls {
+		#partial switch v in d.derived_stmt {
+		case ^ast.Value_Decl:
+			if err := collect_enum_decl(v, &module); err != "" {
+				return {}, fmt.tprintf("%s: %s", path, err)
+			}
+		}
+	}
 	found_config := false
 	for d in file.decls {
 		#partial switch v in d.derived_stmt {
@@ -54,6 +62,58 @@ parse_binding_file :: proc(path: string) -> (Module, string) {
 	return module, ""
 }
 
+collect_enum_decl :: proc(v: ^ast.Value_Decl, module: ^Module) -> string {
+	if len(v.names) != 1 || len(v.values) != 1 do return ""
+	name := expr_string(v.names[0])
+	if name == "" do return ""
+	#partial switch e in v.values[0].derived_expr {
+	case ^ast.Enum_Type:
+		enum_decl, err := parse_enum_decl(name, e)
+		if err != "" do return err
+		module.enums = append_enum(module.enums, enum_decl)
+	}
+	return ""
+}
+
+parse_enum_decl :: proc(name: string, e: ^ast.Enum_Type) -> (Enum, string) {
+	underlying := "i32"
+	if e.base_type != nil {
+		underlying = expr_string(e.base_type)
+		if underlying != "i32" && underlying != "u32" {
+			return {}, fmt.tprintf("enum %s: base type must be i32 or u32", name)
+		}
+	}
+	fields := make([dynamic]Enum_Field)
+	next: i64 = 0
+	for f in e.fields {
+		#partial switch field in f.derived_expr {
+		case ^ast.Ident:
+			append(&fields, Enum_Field{name = field.name, value = next})
+			next += 1
+		case ^ast.Field_Value:
+			fname := expr_string(field.field)
+			if fname == "" do return {}, fmt.tprintf("enum %s: field has no name", name)
+			value: i64
+			#partial switch lit in field.value.derived_expr {
+			case ^ast.Basic_Lit:
+				v, ok := strconv.parse_int(lit.tok.text)
+				if !ok {
+					return {}, fmt.tprintf("enum %s.%s: value must be an integer literal", name, fname)
+				}
+				value = i64(v)
+			case:
+				return {}, fmt.tprintf("enum %s.%s: value must be an integer literal", name, fname)
+			}
+			append(&fields, Enum_Field{name = fname, value = value})
+			next = value + 1
+		case:
+			return {}, fmt.tprintf("enum %s: unsupported field", name)
+		}
+	}
+	if len(fields) == 0 do return {}, fmt.tprintf("enum %s has no fields", name)
+	return Enum{name = name, underlying = underlying, fields = fields[:]}, ""
+}
+
 parse_value_decl :: proc(v: ^ast.Value_Decl, module: ^Module, found_config: ^bool) -> string {
 	attrs := binding_attrs(v.attributes)
 	is_config := false
@@ -71,7 +131,7 @@ parse_value_decl :: proc(v: ^ast.Value_Decl, module: ^Module, found_config: ^boo
 		if mod, ok := attrs["ios_module"]; ok && mod != "" do module.ios_module = mod
 		return ""
 	}
-	f, is_func, ferr := parse_function_decl(v, attrs)
+	f, is_func, ferr := parse_function_decl(v, attrs, module^)
 	if ferr != "" do return ferr
 	if is_func do module.functions = append_func(module.functions, f)
 	return ""
@@ -116,9 +176,19 @@ expr_string :: proc(e: ^ast.Expr) -> string {
 	return ""
 }
 
+is_supported_type :: proc(module: Module, name: string, is_export: bool, is_return: bool) -> bool {
+	if _, ok := parse_primitive(name); ok do return true
+	if is_nullable_cstring(name) {
+		return !is_export && !is_return
+	}
+	if _, ok := find_enum(module, name); ok do return true
+	return false
+}
+
 parse_function_decl :: proc(
 	v: ^ast.Value_Decl,
 	attrs: map[string]string,
+	module: Module,
 ) -> (
 	Function,
 	bool,
@@ -168,8 +238,11 @@ parse_function_decl :: proc(
 		for field in proc_type.params.list {
 			ptype := expr_string(field.type)
 			if ptype == "" do return {}, false, fmt.tprintf("%s: unsupported parameter type", name)
-			if _, ok := parse_primitive(ptype); !ok {
-				return {}, false, fmt.tprintf("%s: unsupported type %q (records/enums/objects are not in this binder version)", name, ptype)
+			if !is_supported_type(module, ptype, is_export, false) {
+				if is_nullable_cstring(ptype) {
+					return {}, false, fmt.tprintf("%s: Nullable_CString is only supported for import parameters", name)
+				}
+				return {}, false, fmt.tprintf("%s: unsupported type %q", name, ptype)
 			}
 			for pname_expr in field.names {
 				pname := expr_string(pname_expr)
@@ -184,8 +257,11 @@ parse_function_decl :: proc(
 		if len(proc_type.results.list) > 1 do return {}, false, fmt.tprintf("%s: multiple return values are not supported", name)
 		ret = expr_string(proc_type.results.list[0].type)
 		if ret == "" do return {}, false, fmt.tprintf("%s: unsupported return type", name)
-		if _, ok := parse_primitive(ret); !ok {
-			return {}, false, fmt.tprintf("%s: unsupported return type %q (records/enums/objects are not in this binder version)", name, ret)
+		if !is_supported_type(module, ret, is_export, true) {
+			if is_nullable_cstring(ret) {
+				return {}, false, fmt.tprintf("%s: Nullable_CString cannot be returned", name)
+			}
+			return {}, false, fmt.tprintf("%s: unsupported return type %q", name, ret)
 		}
 	}
 

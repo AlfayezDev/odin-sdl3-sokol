@@ -12,6 +12,9 @@ package app
 })
 _config :: struct {}
 
+// Optional strings map to String? in Kotlin and Swift.
+Nullable_CString :: cstring
+
 // ---- exports: odin -> platform ----
 
 @(export)
