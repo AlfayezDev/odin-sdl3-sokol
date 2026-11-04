@@ -79,3 +79,6 @@ Records, arrays, objects, callbacks, async, and `b32` are not supported yet.
 - Imports cannot return `cstring` or `Nullable_CString`.
 - The contract lives in `app/bridge.odin` and is compiled with the app, so app
   builds pass `-custom-attribute:odinbinder`.
+- Import names that map to Java keywords are rejected because the Android host
+  is Java. Keyword-like parameter names are prefixed with `p_` in generated
+  code.

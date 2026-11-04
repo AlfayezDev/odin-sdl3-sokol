@@ -32,8 +32,11 @@ show_message :: proc "c" (msg: Nullable_CString)
 @(odinbinder={direction="import"})
 object :: proc "c" ()
 
+@(odinbinder={direction="import"})
+with_params :: proc "c" (object: i32, default: i32)
+
 @(odinbinder={direction="export"})
-default :: proc "c" ()
+guard :: proc "c" ()
 
 @(odinbinder={direction="export"})
 set_color :: proc "c" (color: Color)

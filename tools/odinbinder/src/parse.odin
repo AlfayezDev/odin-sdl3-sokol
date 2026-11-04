@@ -232,6 +232,9 @@ parse_function_decl :: proc(
 	if len(v.names) != 1 || len(v.values) != 1 do return {}, false, ""
 	name := expr_string(v.names[0])
 	if name == "" do return {}, false, ""
+	if is_keyword(c_keywords[:], name) {
+		return {}, false, fmt.tprintf("%s: function name is a C keyword", name)
+	}
 	proc_type: ^ast.Proc_Type
 	is_export := false
 	#partial switch val in v.values[0].derived_expr {
@@ -268,6 +271,10 @@ parse_function_decl :: proc(
 	thread := ""
 	if t, ok := attrs["thread"]; ok do thread = t
 
+	if !is_export && java_is_keyword(camel(name)) {
+		return {}, false, fmt.tprintf("%s: import name is a Java keyword", name)
+	}
+
 	params := make([dynamic]Param)
 	if proc_type.params != nil {
 		for field in proc_type.params.list {
@@ -282,7 +289,7 @@ parse_function_decl :: proc(
 			for pname_expr in field.names {
 				pname := expr_string(pname_expr)
 				if pname == "" do return {}, false, fmt.tprintf("%s: parameter has no name", name)
-				append(&params, Param{name = pname, typ = ptype})
+				append(&params, Param{name = safe_param_name(pname), typ = ptype})
 			}
 		}
 	}

@@ -40,7 +40,8 @@ check 'Color.fromValue(current)' "$tmp/Bridge.kt"
 check 'Color.Red.value' "$tmp/Bridge.kt"
 check 'private external fun nativeSetColor(color: Int)' "$tmp/Bridge.kt"
 check 'fun `object`()' "$tmp/Bridge.kt"
-check 'fun default()' "$tmp/Bridge.kt"
+check 'fun withParams(p_object: Int, p_default: Int)' "$tmp/Bridge.kt"
+check 'fun guard()' "$tmp/Bridge.kt"
 
 check 'public enum Color: Int32' "$tmp/GameBridge.swift"
 check 'case red = 5' "$tmp/GameBridge.swift"
@@ -51,14 +52,16 @@ check 'func showMessage(_ msg: String?)' "$tmp/GameBridge.swift"
 check 'let msg_arg = msg.map { String(cString: $0) }' "$tmp/GameBridge.swift"
 check 'Color.red.rawValue' "$tmp/GameBridge.swift"
 check 'func object()' "$tmp/GameBridge.swift"
-check 'func `default`()' "$tmp/GameBridge.swift"
+check 'func withParams(_ p_object: Int32, _ p_default: Int32)' "$tmp/GameBridge.swift"
+check 'func `guard`()' "$tmp/GameBridge.swift"
 
 check 'void set_color(int32_t color);' "$tmp/bridge.h"
 check 'int32_t pick_color(int32_t current);' "$tmp/bridge.h"
+check 'void with_params(int32_t p_object, int32_t p_default);' "$tmp/bridge.h"
 
 check 'Java_dev_example_Bridge_nativeSetColor' "$tmp/bridge_jni.c"
 check 'GetStaticMethodID(env, g_class, "object", "()V")' "$tmp/bridge_jni.c"
-check 'Java_dev_example_Bridge_default' "$tmp/bridge_jni.c"
+check 'Java_dev_example_Bridge_guard' "$tmp/bridge_jni.c"
 check 'g_mid_pickColor = (*env)->GetStaticMethodID(env, g_class, "pickColor", "(I)I");' "$tmp/bridge_jni.c"
 check 'if (!env || !g_mid_pickColor) return 5;' "$tmp/bridge_jni.c"
 check 'jstring jarg0 = msg ? (*env)->NewStringUTF(env, msg) : 0;' "$tmp/bridge_jni.c"
@@ -75,6 +78,32 @@ f :: proc "c" (e: E)
 EOF
 if "$tool" check --spec "$tmp/bad_default.odin" >/dev/null 2>&1; then
     echo "expected implicit enum base to fail" >&2
+    exit 1
+fi
+
+# Function names that are C keywords are rejected.
+cat > "$tmp/bad_c_keyword.odin" <<'EOF'
+package binding
+@(odinbinder={name="b", android_package="x", android_class="B", ios_module="B"})
+_config :: struct {}
+@(odinbinder={direction="export"})
+default :: proc "c" ()
+EOF
+if "$tool" check --spec "$tmp/bad_c_keyword.odin" >/dev/null 2>&1; then
+    echo "expected C-keyword function name to fail" >&2
+    exit 1
+fi
+
+# Import names that map to Java keywords are rejected.
+cat > "$tmp/bad_java_keyword.odin" <<'EOF'
+package binding
+@(odinbinder={name="b", android_package="x", android_class="B", ios_module="B"})
+_config :: struct {}
+@(odinbinder={direction="import"})
+class :: proc "c" ()
+EOF
+if "$tool" check --spec "$tmp/bad_java_keyword.odin" >/dev/null 2>&1; then
+    echo "expected Java-keyword import to fail" >&2
     exit 1
 fi
 

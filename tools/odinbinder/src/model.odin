@@ -79,6 +79,15 @@ is_nullable_cstring :: proc(name: string) -> bool {
 	return name == "Nullable_CString"
 }
 
+safe_param_name :: proc(name: string) -> string {
+	if is_keyword(c_keywords[:], name) ||
+	   is_keyword(kotlin_keywords[:], name) ||
+	   is_keyword(swift_keywords[:], name) {
+		return fmt.tprintf("p_%s", name)
+	}
+	return name
+}
+
 find_enum :: proc(module: Module, name: string) -> (Enum, bool) {
 	for e in module.enums {
 		if e.name == name do return e, true
@@ -436,6 +445,118 @@ swift_case :: proc(s: string) -> string {
 	return lower_first(camel(s))
 }
 
+java_keywords := []string {
+	"abstract",
+	"assert",
+	"boolean",
+	"break",
+	"byte",
+	"case",
+	"catch",
+	"char",
+	"class",
+	"const",
+	"continue",
+	"default",
+	"do",
+	"double",
+	"else",
+	"enum",
+	"extends",
+	"final",
+	"finally",
+	"float",
+	"for",
+	"goto",
+	"if",
+	"implements",
+	"import",
+	"instanceof",
+	"int",
+	"interface",
+	"long",
+	"native",
+	"new",
+	"package",
+	"private",
+	"protected",
+	"public",
+	"return",
+	"short",
+	"static",
+	"strictfp",
+	"super",
+	"switch",
+	"synchronized",
+	"this",
+	"throw",
+	"throws",
+	"transient",
+	"try",
+	"void",
+	"volatile",
+	"while",
+	"true",
+	"false",
+	"null",
+	"var",
+	"record",
+	"sealed",
+	"permits",
+	"yield",
+	"non-sealed",
+}
+
+c_keywords := []string {
+	"auto",
+	"break",
+	"case",
+	"char",
+	"const",
+	"continue",
+	"default",
+	"do",
+	"double",
+	"else",
+	"enum",
+	"extern",
+	"float",
+	"for",
+	"goto",
+	"if",
+	"inline",
+	"int",
+	"long",
+	"register",
+	"restrict",
+	"return",
+	"short",
+	"signed",
+	"sizeof",
+	"static",
+	"struct",
+	"switch",
+	"typedef",
+	"union",
+	"unsigned",
+	"void",
+	"volatile",
+	"while",
+	"_Alignas",
+	"_Alignof",
+	"_Atomic",
+	"_Bool",
+	"_Complex",
+	"_Generic",
+	"_Imaginary",
+	"_Noreturn",
+	"_Static_assert",
+	"_Thread_local",
+	"bool",
+	"true",
+	"false",
+}
+
 kotlin_keywords := []string {
 	"as",
 	"break",
@@ -536,6 +657,15 @@ kotlin_ident :: proc(name: string) -> string {
 
 swift_ident :: proc(name: string) -> string {
 	if is_keyword(swift_keywords[:], name) do return fmt.tprintf("`%s`", name)
+	return name
+}
+
+java_is_keyword :: proc(name: string) -> bool {
+	return is_keyword(java_keywords[:], name)
+}
+
+c_ident :: proc(name: string) -> string {
+	if is_keyword(c_keywords[:], name) do return fmt.tprintf("p_%s", name)
 	return name
 }
 

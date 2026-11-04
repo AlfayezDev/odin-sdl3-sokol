@@ -120,6 +120,10 @@ foreign {
 
 Enums map to `enum class Color` in Kotlin and `enum Color: Int32`/`UInt32` in Swift.
 Kotlin/Swift keyword identifiers are escaped; Swift case collisions are rejected.
+Because the Android host is Java, import names that map to Java keywords are
+rejected. Parameter names that are C/Kotlin/Swift keywords are prefixed with
+`p_` in generated code.
+
 Unsigned C types use the signed JVM type of the same width in Kotlin
 (`u32` → `Int`), keeping the C/JNI bits unchanged.
 

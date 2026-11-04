@@ -297,7 +297,11 @@ emit_kotlin :: proc(module: Module, path: string) -> string {
 				append(&call_args, p.name)
 			}
 		}
-		call := fmt.tprintf("platform?.%s(%s)", camel(f.name), strings.join(call_args[:], ", "))
+		call := fmt.tprintf(
+			"platform?.%s(%s)",
+			kotlin_ident(camel(f.name)),
+			strings.join(call_args[:], ", "),
+		)
 		if f.ret == "" {
 			if f.thread == "ui" || f.thread == "main" {
 				line(&b, 2, strings.concatenate([]string{"mainHandler.post { ", call, " }"}))
