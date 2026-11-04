@@ -3,7 +3,7 @@ package app
 import sdtx "libs:sdtx"
 import sg "libs:sg"
 import sshape "libs:sshape"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 Shape_Entry :: struct {
     pos:  [3]f32,

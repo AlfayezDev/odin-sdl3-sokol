@@ -1,7 +1,7 @@
 # Writing bindings
 
-Only the files outside `generated/` are written by hand. The generated folders
-are ignored by git and recreated by:
+Only the files outside `build/generated/` are written by hand. The generated
+folders are ignored by git and recreated by:
 
 ```sh
 odin run builder -- bindings
@@ -60,7 +60,7 @@ No generated Odin package and no import alias.
 
 ## 3. Android host
 
-`binding/android/java/.../OdinsokolActivity.java` installs the generated
+`binding/android/app/src/main/java/.../OdinsokolActivity.java` installs the generated
 `PlatformHandler`:
 
 ```java
@@ -91,9 +91,9 @@ public func odinbinder_ios_install() {
 ## Generated output
 
 ```text
-generated/shared/bridge.h           shared C ABI header
-generated/android/                  Kotlin bridge + JNI glue
-generated/ios/                      Swift bridge
+build/generated/android/            Kotlin bridge + JNI glue
+build/generated/ios/                Swift bridge
+build/generated/shaders/            sokol-shdc shader bindings
 ```
 
 Supported types:

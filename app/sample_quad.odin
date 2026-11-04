@@ -1,7 +1,7 @@
 package app
 
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 quad_state :: struct {
     pass_action: sg.Pass_Action,

@@ -2,7 +2,7 @@ package app
 
 import sg "libs:sg"
 import sshape "libs:sshape"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 offscreen_state :: struct {
     offscreen_pass: sg.Pass,

@@ -3,11 +3,6 @@ package odinbinder
 import "core:fmt"
 import "core:strings"
 
-Target :: enum {
-	Android,
-	Ios,
-}
-
 Direction :: enum {
 	Export,
 	Import,

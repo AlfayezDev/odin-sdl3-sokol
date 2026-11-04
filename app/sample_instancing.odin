@@ -1,7 +1,7 @@
 package app
 
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 INST_MAX_PARTICLES :: 512 * 1024
 INST_EMIT_PER_FRAME :: 10

@@ -2,10 +2,10 @@ package odin_sokol_build
 
 // Unified build orchestrator. Run from the repo root:
 //   odin run builder --            (desktop, default)
-//   odin run builder -- tools      (build odinbinder + androidgen, verify sokol-shdc)
+//   odin run builder -- tools      (build odinbinder, verify sokol-shdc)
 //   odin run builder -- test       (run odinbinder regression tests)
-//   odin run builder -- shaders    (sokol-shdc -> vendors/shaders)
-//   odin run builder -- bindings   (odinbinder -> C/Odin/Kotlin/JNI/Swift bridge)
+//   odin run builder -- shaders    (sokol-shdc -> build/generated/shaders)
+//   odin run builder -- bindings   (odinbinder -> Kotlin/JNI/Swift bridge)
 //   odin run builder -- desktop
 //   odin run builder -- android    [SAMPLE_ID=2] [SMOKE_FRAMES=0] [ANDROID_BUILD_ONLY=1]
 //   odin run builder -- ios        (macOS only: xcodegen + xcodebuild simulator build)
@@ -20,15 +20,12 @@ foreign {
 	system :: proc "c" (command: cstring) -> c.int ---
 }
 
-ANDROIDGEN :: "build/tools/androidgen"
 ODINBINDER :: "build/tools/odinbinder"
-ANDROID_SPEC :: "binding/android/android.yaml"
 BINDING_SPEC :: "app/bridge.odin"
-BRIDGE_HEADER :: "generated/shared/bridge.h"
-ANDROID_KOTLIN :: "generated/android/kotlin/dev/alfayez/odinsokol/OdinBridge.kt"
-ANDROID_JNI :: "generated/android/bridge_jni.c"
-IOS_SWIFT :: "generated/ios/GameBridge.swift"
-ODIN_APP_FLAGS :: "-collection:libs=vendors -custom-attribute:odinbinder"
+ANDROID_KOTLIN :: "build/generated/android/OdinBridge.kt"
+ANDROID_JNI :: "build/generated/android/bridge_jni.c"
+IOS_SWIFT :: "build/generated/ios/GameBridge.swift"
+ODIN_APP_FLAGS :: "-collection:libs=vendors -collection:gen=build/generated -custom-attribute:odinbinder"
 
 main :: proc() {
 	target := "desktop"
@@ -58,7 +55,7 @@ main :: proc() {
 		run_tests()
 	case:
 		fmt.eprintln("unknown target:", target)
-		fmt.eprintln("usage: odin run builder -- [desktop|android|ios|shaders|bindings|tools]")
+		fmt.eprintln("usage: odin run builder -- [desktop|android|ios|shaders|bindings|tools|test]")
 		os.exit(1)
 	}
 }

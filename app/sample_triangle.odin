@@ -1,7 +1,7 @@
 package app
 
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 triangle_state :: struct {
     pip:         sg.Pipeline,

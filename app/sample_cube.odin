@@ -1,7 +1,7 @@
 package app
 
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 cube_state :: struct {
     rx, ry: f32,

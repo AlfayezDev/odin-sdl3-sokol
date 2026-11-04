@@ -10,6 +10,7 @@ build_ios :: proc(sample_id, smoke: i32) {
 	}
 	ensure_sdl_sources()
 	gen_bindings()
+	run_shaders()
 	sh("mkdir -p build/ios")
 	if !sh("xcodegen generate --spec binding/ios/project.yaml --project build/ios") {
 		fail("xcodegen failed")

@@ -1,5 +1,4 @@
 /build/
-/generated/
 /odin-sokol
 *.log
 /deps/

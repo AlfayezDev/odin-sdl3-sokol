@@ -1,8 +1,7 @@
 # odinbinder
 
 Odin-native binding generator. Parses binding contracts written as Odin
-declarations and emits the C ABI header, Kotlin bridge + JNI glue, and Swift
-bridge.
+declarations and emits the Kotlin bridge, JNI glue, and Swift bridge.
 
 No YAML schema, no separate IDL: the contract is Odin, parsed with
 `core:odin/parser`.
@@ -42,18 +41,16 @@ attribute wins.
 ```sh
 odin build tools/odinbinder/src -o:speed -out:build/tools/odinbinder
 
-build/tools/odinbinder generate --target all --spec app/bridge.odin \
-  --header generated/shared/bridge.h \
-  --kotlin generated/android/kotlin/dev/example/app/OdinBridge.kt \
-  --jni generated/android/bridge_jni.c \
-  --swift generated/ios/GameBridge.swift
+build/tools/odinbinder generate --spec app/bridge.odin \
+  --kotlin build/generated/android/OdinBridge.kt \
+  --jni build/generated/android/bridge_jni.c \
+  --swift build/generated/ios/GameBridge.swift
 
 build/tools/odinbinder check --spec app/bridge.odin
 ```
 
-`--target android|ios|all`. One contract feeds the header, Kotlin/JNI, and
-Swift; `--target all` writes every output. In this repo the
-outputs are ignored and recreated by `odin run builder -- bindings`.
+One contract feeds Kotlin/JNI and Swift. The outputs are ignored and recreated
+by `odin run builder -- bindings`.
 
 ## Tests
 

@@ -6,9 +6,6 @@ import "core:fmt"
 
 ensure_tools :: proc() {
 	sh("mkdir -p build/tools")
-	if !sh(fmt.tprintf("odin build third_party/androidgen/src -o:speed -out:%s", ANDROIDGEN)) {
-		fail("androidgen build failed")
-	}
 	if !sh(fmt.tprintf("odin build tools/odinbinder/src -o:speed -out:%s", ODINBINDER)) {
 		fail("odinbinder build failed")
 	}
@@ -41,10 +38,10 @@ run_tests :: proc() {
 gen_bindings :: proc() {
 	ensure_tools()
 	if !sh(fmt.tprintf(
-		"%s generate --target all --spec %s --header %s --kotlin %s --jni %s --swift %s --quiet",
-		ODINBINDER, BINDING_SPEC, BRIDGE_HEADER, ANDROID_KOTLIN, ANDROID_JNI, IOS_SWIFT,
+		"%s generate --spec %s --kotlin %s --jni %s --swift %s --quiet",
+		ODINBINDER, BINDING_SPEC, ANDROID_KOTLIN, ANDROID_JNI, IOS_SWIFT,
 	)) {
 		fail("odinbinder failed")
 	}
-	fmt.println("bindings regenerated under generated/")
+	fmt.println("bindings regenerated under build/generated/")
 }

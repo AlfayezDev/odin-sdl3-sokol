@@ -1,7 +1,7 @@
 package app
 
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 DYNT_IMAGE_W :: 128
 DYNT_IMAGE_H :: 128

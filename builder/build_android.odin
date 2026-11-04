@@ -30,6 +30,7 @@ ensure_sdl_android_aar :: proc() {
 
 build_android :: proc(sample_id, smoke: i32) {
 	gen_bindings()
+	run_shaders()
 	ensure_sdl_android_aar()
 
 	ndk := os.get_env_alloc("ANDROID_NDK", context.allocator)
@@ -73,7 +74,7 @@ printf '%s' "$NDK" > build/android_ndk_path
 	}
 
 	sh("mkdir -p build/gen")
-	if !sh(fmt.tprintf("%s -x c -c -O2 -Igenerated/shared %s -o build/gen/bridge_jni.o", android_cc, ANDROID_JNI)) {
+	if !sh(fmt.tprintf("%s -x c -c -O2 %s -o build/gen/bridge_jni.o", android_cc, ANDROID_JNI)) {
 		fail("bridge_jni.c compile failed")
 	}
 
@@ -89,19 +90,14 @@ printf '%s' "$NDK" > build/android_ndk_path
 	}
 	sh(fmt.tprintf("cp %s/libmain.so %s/libSDL3.so build/android/jni/arm64-v8a/", out_dir, sdl_lib_dir))
 
-	// generate the gradle project from binding/android/android.yaml
-	if !sh(fmt.tprintf("%s generate --spec %s --templates third_party/androidgen", ANDROIDGEN, ANDROID_SPEC)) {
-		fail("androidgen generate failed")
-	}
-
-	if !sh("(cd build/android-project && ./gradlew --no-daemon :app:assembleDebug)") {
+	if !sh("(cd binding/android && ./gradlew --no-daemon --project-cache-dir ../../build/android-project/.gradle :app:assembleDebug)") {
 		fail("gradle assembleDebug failed")
 	}
 	if os.get_env_alloc("ANDROID_BUILD_ONLY", context.allocator) == "1" {
-		fmt.println("ANDROID_BUILD_ONLY=1: packaged build/android-project/app/build/outputs/apk/debug/app-debug.apk, skipping install/launch")
+		fmt.println("ANDROID_BUILD_ONLY=1: packaged build/android-project/app/outputs/apk/debug/app-debug.apk, skipping install/launch")
 		return
 	}
-	if !sh("adb install -r build/android-project/app/build/outputs/apk/debug/app-debug.apk") {
+	if !sh("adb install -r build/android-project/app/outputs/apk/debug/app-debug.apk") {
 		fail("adb install failed")
 	}
 	sh("adb shell am force-stop dev.alfayez.odinsokol")

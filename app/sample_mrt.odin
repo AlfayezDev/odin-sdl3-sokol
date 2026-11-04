@@ -2,7 +2,7 @@ package app
 
 import math "core:math"
 import sg "libs:sg"
-import shaders "libs:shaders"
+import shaders "gen:shaders"
 
 MRT_NUM :: 3
 

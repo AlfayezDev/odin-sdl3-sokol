@@ -8,6 +8,7 @@ import "core:os"
 build_desktop :: proc(sample_id, smoke: i32) {
 	ensure_sdl_sources()
 	gen_bindings()
+	run_shaders()
 
 	mac := ODIN_OS == .Darwin
 	sh("mkdir -p build/desktop")

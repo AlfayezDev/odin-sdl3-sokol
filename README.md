@@ -8,9 +8,9 @@ All build/run logic lives in `builder/` — run it with odin itself.
 Requires Odin `dev-2026-11` (pinned in `.mise.toml`).
 
 ```sh
-odin run builder -- tools      # build odinbinder + androidgen, verify sokol-shdc
-odin run builder -- shaders    # sokol-shdc -> vendors/shaders
-odin run builder -- bindings   # odinbinder -> C header, Odin, Kotlin, JNI, Swift
+odin run builder -- tools      # build odinbinder, verify sokol-shdc
+odin run builder -- shaders    # sokol-shdc -> build/generated/shaders
+odin run builder -- bindings   # odinbinder -> Kotlin, JNI, Swift
 odin run builder -- test       # odinbinder regression tests
 
 odin run builder -- desktop    # macOS (Homebrew SDL3) or Linux (SDL3 built from deps/SDL3-3.2.28)
@@ -31,7 +31,7 @@ odin run builder -- ios        # xcodegen + xcodebuild simulator app (macOS)
 Build entry points:
 
 - `builder/build.odin` — CLI dispatch and shared helpers
-- `builder/build_tools.odin` — odinbinder + androidgen bootstrap
+- `builder/build_tools.odin` — odinbinder bootstrap
 - `builder/build_sdl.odin` — SDL config and sokol object compilation
 - `builder/build_shaders.odin` — sokol-shdc generation
 - `builder/build_desktop.odin` / `builder/build_android.odin` / `builder/build_ios.odin` — platform builds
@@ -51,13 +51,12 @@ Generated and vendored:
 - `deps/SDL3-3.2.28.aar` — prebuilt SDL3 Android package, downloaded on first Android build (not checked in)
 - `vendors/sokol/` — vendored sokol C headers
 - `vendors/{sg,sgl,sdtx,sshape}/` — Odin bindings for those headers
-- `vendors/shaders/` — sokol-shdc-generated Odin shader bindings
 - `shaders/samples/*.glsl` — shader sources; regenerate with `odin run builder -- shaders`
 - `binding/README.md` — how to write a binding on each platform
+- `binding/android/` — static Gradle project
 - `app/bridge.odin` — the binding contract and Odin implementation
-- `generated/` — generated on demand and ignored by git
+- `build/generated/` — generated bridge and shader code, ignored by git
 - `tools/odinbinder/` — Odin-native bridge generator
-- `third_party/androidgen/` — vendored Android Gradle project generator
 - `third_party/sokol-shdc/` — pinned shader compiler binaries + fetch script
 
 The vendored sokol headers compile straight from the headers with impl defines,
